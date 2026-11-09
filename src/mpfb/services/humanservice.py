@@ -154,6 +154,13 @@ class HumanService:
             human_info["skin_material_type"] = "GAMEENGINE"
             return
 
+        if material_type == "stylized_skin":
+            # One material shared by the body and the proxy; its settings are the group node's inputs
+            group_node = NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, typing.cast(bpy.types.Material, material).node_tree), "ShaderNodeGroup")
+            human_info["skin_material_type"] = "STYLIZED"
+            human_info["skin_material_settings"]["stylized"] = NodeService.get_socket_default_values(typing.cast(bpy.types.Node, group_node))
+            return
+
         # Neither branch below can be reached for an empty slot: identify_material() answers
         # "empty" when the slot holds no material, and "empty" matches neither test.
         skin_material = typing.cast(bpy.types.Material, material)
@@ -784,12 +791,14 @@ class HumanService:
 
         Args:
             mhmat_file (str | None): The path to the MHMAT file to load. None is only valid together with
-                skin_type="LAYERED", which then builds the material with no mhmat values.
+                skin_type="LAYERED", which then builds the material with no mhmat values, or "STYLIZED",
+                which never reads one.
             basemesh (bpy.types.Object): The base mesh object to which the skin material will be applied.
             bodyproxy (bpy.types.Object | None): The body proxy object to which the skin material will be applied. Default is None.
-            skin_type (str): The type of skin material to use (e.g., "ENHANCED_SSS", "MAKESKIN", "GAMEENGINE", "LAYERED"). Default is "ENHANCED_SSS".
+            skin_type (str): The type of skin material to use (e.g., "STYLIZED", "ENHANCED_SSS", "MAKESKIN", "GAMEENGINE", "LAYERED"). Default is "ENHANCED_SSS".
             material_instances (bool): Whether to create material instances for the skin material. Default is True.
             slot_overrides (dict[str, dict[str, Any]] | None): Slot overrides to apply, keyed by slot name. Default is None.
+                For STYLIZED the "stylized" key holds the group input values.
             operator (bpy.types.Operator, optional): The operator calling this function, used for reporting warnings. Default is None.
 
         Note:
@@ -804,7 +813,7 @@ class HumanService:
             if operator:
                 operator.report({'WARNING'}, "The skin material file is missing: " + os.path.basename(mhmat_file))
             mhmat_file = None
-            if skin_type != "LAYERED":
+            if skin_type not in ["LAYERED", "STYLIZED"]:
                 return
 
         if mhmat_file:
@@ -841,6 +850,19 @@ class HumanService:
             mhmat.populate_from_mhmat(typing.cast(str, mhmat_file))
             NodeWrapperGameEngine.create_instance(blender_material.node_tree, mhmat=mhmat)
 
+        if skin_type == "STYLIZED":
+            # STYLIZED_SPEC.md 7.1: one Principled BSDF, painted from the group inputs and the sty01 maps
+            from ..entities.nodemodel.v2.materials.nodewrapperstylizedskin import NodeWrapperStylizedSkin, SUBSURFACE_SCALE_METERS
+            blender_material = MaterialService.create_empty_material(name, basemesh)
+            NodeWrapperStylizedSkin.create_instance(blender_material.node_tree)
+            group_node = typing.cast(bpy.types.Node, NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, blender_material.node_tree), "ShaderNodeGroup"))
+            # 0.5 cm in scene units: scale factor 0.1 is metres, 1.0 decimetres, 10 centimetres
+            scale_factor = GeneralObjectProperties.get_value("scale_factor", entity_reference=basemesh)
+            settings = {"SubsurfaceScale": SUBSURFACE_SCALE_METERS * scale_factor / 0.1}
+            if slot_overrides and "stylized" in slot_overrides:
+                settings.update(slot_overrides["stylized"])
+            NodeService.set_socket_default_values(group_node, settings)
+
         if skin_type == "LAYERED":
             blender_material = MaterialService.create_v2_skin_material(name, basemesh, mhmat_file)
             if slot_overrides:
@@ -867,12 +889,12 @@ class HumanService:
             blender_material = MaterialService.create_empty_material(name, basemesh)
             enhanced_material.apply_node_tree(blender_material)
 
-        if (not material_instances or skin_type == "GAMEENGINE") and bodyproxy and basemesh:
+        if (not material_instances or skin_type in ["GAMEENGINE", "STYLIZED"]) and bodyproxy and basemesh:
             material = MaterialService.get_material(basemesh)
             if material:
                 typing.cast(bpy.types.Mesh, bodyproxy.data).materials.append(material)
 
-        if material_instances and skin_type != "LAYERED" and skin_type != "GAMEENGINE":
+        if material_instances and skin_type not in ["LAYERED", "GAMEENGINE", "STYLIZED"]:
             _LOG.debug("Will now attempt to create material slots for", (basemesh, bodyproxy))
             MaterialService.create_and_assign_material_slots(basemesh, bodyproxy)
 
@@ -927,7 +949,7 @@ class HumanService:
         mhmat_file = None
         _LOG.debug("Skin mhmat", human_info["skin_mhmat"])
         if not "skin_mhmat" in human_info or not human_info["skin_mhmat"]:
-            if human_info["skin_material_type"] != "LAYERED":
+            if human_info["skin_material_type"] not in ["LAYERED", "STYLIZED"]:
                 return
         else:
             mhmat_file = AssetService.find_asset_absolute_path(human_info["skin_mhmat"], "skins")

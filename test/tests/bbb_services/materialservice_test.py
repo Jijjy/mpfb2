@@ -100,6 +100,20 @@ def test_identify_material():
     ObjectService.delete_object(obj)
 
 
+def test_identify_material_stylized_skin():
+    """A STYLIZED skin made by HumanService is identified by its BloodTint input and serializes as STYLIZED"""
+    basemesh = HumanService.create_human()
+    assert basemesh
+    HumanService.set_character_skin(None, basemesh, skin_type="STYLIZED")
+    material = MaterialService.get_material(basemesh)
+    assert MaterialService.identify_material(material) == "stylized_skin"
+    human_info = HumanService._create_default_human_info_dict()
+    HumanService._populate_human_info_with_skin_info(human_info, basemesh)
+    assert human_info["skin_material_type"] == "STYLIZED"
+    assert "BloodTint" in human_info["skin_material_settings"]["stylized"]
+    ObjectService.delete_object(basemesh)
+
+
 def test_add_focus_nodes_makeskin():
     obj = _create_human_with_makeskin_material()
     assert obj
