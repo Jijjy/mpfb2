@@ -36,7 +36,6 @@ _SCALE_BY_FACTOR = {"METER": 0.1, "DECIMETER": 1.0, "CENTIMETER": 10.0}
 
 # Skin types for which material instances are always forced off, mirroring the asset
 # library's load-skin operator.
-_NO_INSTANCE_SKIN_TYPES = ["LAYERED", "GAMEENGINE", "MAKESKIN"]
 
 # The eyes are not randomized from a pool; the drop-down maps to these hardcoded asset
 # fragments (parent-dir/basename), resolved among the installed eyes assets.
@@ -203,13 +202,10 @@ def _apply_random_skin(report, spec, macro_details, basemesh, rng, discovery):
         report({'WARNING'}, "No matching skin was found; the human was created with the default material")
         return
 
-    skin_type = skin_cfg.get("skin_type", "MAKESKIN")
-    material_instances = skin_cfg.get("material_instances", True)
-    if skin_type in _NO_INSTANCE_SKIN_TYPES:
-        material_instances = False
+    skin_type = skin_cfg.get("skin_type", "STYLIZED")
 
     # There is no proxy mesh at creation time, so only the basemesh gets the material.
-    HumanService.set_character_skin(pick["path"], basemesh, bodyproxy=None, skin_type=skin_type, material_instances=material_instances)
+    HumanService.set_character_skin(pick["path"], basemesh, bodyproxy=None, skin_type=skin_type)
 
     for slot in basemesh.material_slots:
         if str(slot.material.name).lower().endswith("body"):

@@ -2,7 +2,7 @@
 
 import bpy
 from .... import dynamic_import, ObjectService
-from ..._helpers import MockOperatorBase, HumanFixture, BasemeshWithV2SkinFixture
+from ..._helpers import MockOperatorBase, HumanFixture, BasemeshWithMakeSkinFixture
 
 MPFB_OT_Remove_Makeup_Operator = dynamic_import(
     "mpfb.ui.operations.matops.operators.removemakeup",
@@ -25,8 +25,8 @@ def test_remove_makeup_poll_true_with_basemesh():
         assert MPFB_OT_Remove_Makeup_Operator.poll(bpy.context)
 
 
-def test_remove_makeup_executes_with_v2_skin():
-    with BasemeshWithV2SkinFixture() as fixture:
+def test_remove_makeup_executes_with_makeskin():
+    with BasemeshWithMakeSkinFixture() as fixture:
         mockself = MockOperatorBase()
         result = MPFB_OT_Remove_Makeup_Operator.hardened_execute(mockself, bpy.context)
         assert result == {'FINISHED'}

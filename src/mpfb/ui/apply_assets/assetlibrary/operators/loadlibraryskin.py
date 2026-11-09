@@ -30,17 +30,11 @@ class MPFB_OT_Load_Library_Skin_Operator(MpfbOperator):
 
         ctx = MpfbContext(context=context, scene_properties=ASSET_SETTINGS_PROPERTIES)
 
-        material_instances = ctx.material_instances
-
         blender_object = context.active_object
         basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(blender_object, "Basemesh")
         bodyproxy = ObjectService.find_object_of_type_amongst_nearest_relatives(blender_object, "Proxymeshes")
 
-        if ctx.skin_type in ["LAYERED", "GAMEENGINE", "MAKESKIN"]:
-            material_instances = False
-
-        HumanService.set_character_skin(self.filepath, basemesh, bodyproxy=bodyproxy, skin_type=ctx.skin_type, material_instances=material_instances,
-                                       operator=self)
+        HumanService.set_character_skin(self.filepath, basemesh, bodyproxy=bodyproxy, skin_type=ctx.skin_type, operator=self)
 
         for slot in basemesh.material_slots:
             if str(slot.material.name).lower().endswith("body"):

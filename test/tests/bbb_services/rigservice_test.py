@@ -67,7 +67,7 @@ HUMAN_PRESET_DICT = {
         "proxy": "",
         "rig": "default",
         "skin_material_settings": {},
-        "skin_material_type": "ENHANCED_SSS",
+        "skin_material_type": "STYLIZED",
         "skin_mhmat": "middleage_caucasian_female/middleage_caucasian_female.mhmat",
         "targets": [
             {

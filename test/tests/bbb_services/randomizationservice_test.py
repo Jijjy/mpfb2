@@ -381,7 +381,7 @@ def test_default_spec_has_skin_assets():
     assert skin["pack"] == ""
     assert skin["include"] == ""
     assert skin["exclude"] == "special_suit"
-    assert skin["skin_type"] == "MAKESKIN"
+    assert skin["skin_type"] == "STYLIZED"
     assert skin["material_instances"] is True
 
 

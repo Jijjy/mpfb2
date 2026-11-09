@@ -8,24 +8,23 @@ from .logservice import LogService
 from .objectservice import ObjectService
 from .nodeservice import NodeService
 from .meshservice import MeshService
-from ..entities.nodemodel.v2.materials import NodeWrapperSkin
 from ..entities.nodemodel.v2.composites import NodeWrapperMpfbAlphaMixer
 
 _LOG = LogService.get_logger("services.materialservice")
 
-MaterialType = typing.Literal["empty", "stylized_skin", "enhanced_skin", "procedural_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]
-"""The eight answers ``identify_material()`` can give.
+MaterialType = typing.Literal["empty", "stylized_skin", "procedural_eyes", "makeskin", "gameengine", "unknown"]
+"""The six answers ``identify_material()`` can give.
 
 A literal rather than a bare ``str``, so that the type tests the rest of the module performs against
 the result are checked against the same set of values the identifier can actually return."""
 
 InkLayerNodes = tuple[bpy.types.Node, bpy.types.Node]
-"""The ``(uvmap_node, texture_node)`` pair the four private ink layer builders return.
+"""The ``(uvmap_node, texture_node)`` pair the two private ink layer builders return.
 
 The nodes are a ``ShaderNodeUVMap`` and a ``ShaderNodeTexImage`` at runtime. The second is now typed
 as such by ``NodeService.create_image_texture_node()``, but the first comes from the generic
 ``create_node()``, which answers the ``Node`` base class -- so naming the pair precisely would mean
-a cast at each of the four returns for one caller's benefit. The base class is kept for both."""
+a cast at each of the two returns for one caller's benefit. The base class is kept for both."""
 
 # On the node finders: NodeService's find_* methods answer Node | None, and NodeService.add_link()
 # does not check the nodes it is handed, so a None reaches links.new() as one. Where a method below
@@ -123,14 +122,10 @@ class MaterialService():
                 if "BloodTint" in node_info["values"]:
                     # STYLIZED skin (NodeWrapperStylizedSkin), STYLIZED_SPEC.md 7.1
                     return "stylized_skin"
-                if "Pore detail" in node_info["values"]:
-                    return "enhanced_skin"
                 if "IrisInner" in node_info["values"]:
                     return "procedural_eyes"
-                if "NavelCenterOverride" in node_info["values"]:
-                    return "layered_skin"
 
-        # Since we're not enhanced skin nor procedural eyes, next guess is makeskin. The
+        # Since we're not stylized skin nor procedural eyes, next guess is makeskin. The
         # diffuseIntensity is there in most cases.
         if NodeService.find_node_by_name(node_tree, "diffuseIntensity"):
             return "makeskin"
@@ -219,14 +214,7 @@ class MaterialService():
 
         node_tree = typing.cast(bpy.types.NodeTree, material.node_tree)
 
-        if material_type == "enhanced_skin":
-            # identify_material() only answers enhanced_skin after finding a ShaderNodeGroup whose
-            # values carry "Pore detail", so the same search here cannot come back empty.
-            group = typing.cast(bpy.types.ShaderNodeGroup, NodeService.find_first_node_by_type_name(node_tree, "ShaderNodeGroup"))
-            MaterialService._set_normalmap_in_nodetree(typing.cast(bpy.types.NodeTree, group.node_tree), filename)
-            return
-
-        if material_type in ["makeskin", "layered_skin"]:
+        if material_type == "makeskin":
             MaterialService._set_normalmap_in_nodetree(node_tree, filename)
             return
 
@@ -263,88 +251,6 @@ class MaterialService():
         material.blend_method = 'HASHED'
         if blender_object is not None:
             typing.cast(bpy.types.Mesh, blender_object.data).materials.append(material)
-        return material
-
-    @staticmethod
-    def create_v2_skin_material(name: str, blender_object: bpy.types.Object | None = None,
-                                mhmat_file: str | None = None) -> bpy.types.Material:
-        """Create a new v2 skin material with the given name, and assign it to the blender object.
-
-        Args:
-            name (str): The name of the material to assign.
-            blender_object (bpy.types.Object | None): The blender object to assign the material to. A
-                None object raises, despite the default; the argument is only optional in form.
-            mhmat_file (str | None): The path to the mhmat file to use.
-
-        Returns:
-            bpy.types.Material: The material that was assigned.
-        """
-
-        if blender_object is None:
-            raise ValueError("Object needed when creating a v2 skin")
-
-        MaterialService.delete_all_materials(blender_object)
-        material = MaterialService.create_empty_material(name, blender_object)
-
-        node_tree = material.node_tree
-
-        if not node_tree:
-            raise ValueError("Could not deduce node tree from new empty material")
-
-        NodeWrapperSkin.create_instance(node_tree)
-
-        mastercolor = NodeService.find_first_group_node_by_tree_name(node_tree, "MpfbSkinMasterColor")
-        if mastercolor:
-            # In case we do not find a diffuse texture later on. NodeSocket does not declare
-            # default_value; it is declared on each concrete socket subclass.
-            typing.cast(bpy.types.NodeSocketFloat, mastercolor.inputs["DiffuseTextureStrength"]).default_value = 0.0
-        else:
-            _LOG.warn("Could not find master color control in v2 skin")
-
-        if mhmat_file:
-            from ..entities.material.makeskinmaterial import MakeSkinMaterial
-            makeskin_material = MakeSkinMaterial()
-            makeskin_material.populate_from_mhmat(mhmat_file)
-
-            diffuse = makeskin_material.get_value("diffuseTexture")
-            normalmap = makeskin_material.get_value("normalmapTexture")
-
-            _LOG.debug("Textures", (diffuse, normalmap))
-
-            if normalmap or diffuse:
-                texco = NodeService.create_node(node_tree, "ShaderNodeTexCoord", name="TexCoord", label="Texture Coordinates", xpos=-901, ypos=425)
-                uvsocket = texco.outputs["UV"]
-
-            if normalmap:
-                MaterialService.set_normalmap(material, normalmap)
-                # TODO: link to texco for completeness
-
-            if diffuse:
-                # Re-read rather than reuse the local: set_normalmap() above has rewritten the tree,
-                # and the declared type of material.node_tree is optional again on every read.
-                node_tree = typing.cast(bpy.types.NodeTree, material.node_tree)
-                diffuse = NodeService.create_image_texture_node(node_tree,
-                                                                name="DiffuseTexture",
-                                                                label="Diffuse Texture",
-                                                                xpos=-556,
-                                                                ypos=602,
-                                                                image_path_absolute=diffuse)
-                from_socket = diffuse.outputs["Color"]
-                # NodeWrapperSkin.create_instance() above unconditionally builds the
-                # MpfbSkinMasterColor group, so the lookup that set mastercolor cannot have missed. The
-                # branch that merely warns above is defensive against a broken node data install, and
-                # this dereference would fail in that case too.
-                master = typing.cast(bpy.types.Node, mastercolor)
-                to_socket = master.inputs["DiffuseTexture"]
-                node_tree.links.new(from_socket, to_socket)
-                typing.cast(bpy.types.NodeSocketFloat, master.inputs["DiffuseTextureStrength"]).default_value = 1.0
-                to_socket = diffuse.inputs["Vector"]
-                node_tree.links.new(uvsocket, to_socket)
-
-        # Material.diffuse_color is declared bpy_prop_array[float], which no python sequence satisfies,
-        # although assigning a list to a fixed size float array is ordinary at runtime.
-        material.diffuse_color = MaterialService.get_skin_diffuse_color()  # pyright: ignore[reportAttributeAccessIssue]
-
         return material
 
     @staticmethod
@@ -678,144 +584,6 @@ class MaterialService():
         return uvmap, texture
 
     @staticmethod
-    def _layered_first_ink_layer_nodes(material: bpy.types.Material) -> InkLayerNodes:
-        """Add new nodes for ink layer 1, linked to color control"""
-
-        node_tree = typing.cast(bpy.types.NodeTree, material.node_tree)
-
-        color_control: bpy.types.Node | None = None
-        diffuse_texture: bpy.types.Node | None = None
-        for node in node_tree.nodes:
-            _LOG.debug("node", (node, node.name, node.type))
-            if node.type == "GROUP" and node.name == "colorgroup":
-                color_control = node
-            if node.name == "DiffuseTexture":
-                diffuse_texture = node
-
-        if color_control is None:
-            raise ValueError("Could not find a color control group in the material. Not a layered material?")
-
-        # This is the RGBA value for the skin if no diffuse texture is used
-        default_skin_color = typing.cast(bpy.types.NodeSocketColor, color_control.inputs["SkinColor"]).default_value
-
-        # Create the first alpha layer mixer
-        mix_node = NodeWrapperMpfbAlphaMixer.create_instance(node_tree, name="inkLayer1mix", label="Ink Layer 1 Mix")
-        mix_node.location.x = -500
-        mix_node.location.y = 1000
-        # Socket default values; see the note at the top of the module.
-        background_color = typing.cast(bpy.types.NodeSocketColor, mix_node.inputs["BackgroundColor"])
-        upper_color = typing.cast(bpy.types.NodeSocketColor, mix_node.inputs["UpperLayerColor"])
-        upper_alpha = typing.cast(bpy.types.NodeSocketFloat, mix_node.inputs["UpperLayerAlpha"])
-        background_color.default_value = default_skin_color
-        upper_color.default_value = (0.0, 0.0, 0.0, 1.0)  # pyright: ignore[reportAttributeAccessIssue]
-        upper_alpha.default_value = 0.0
-
-        # Create an image texture node
-        texture = NodeService.create_image_texture_node(node_tree, "inkLayer1tex", "Ink layer 1 Texture", xpos=-900, ypos=1100)
-
-        # Create an uv map node
-        uvmap = NodeService.create_node(node_tree, "ShaderNodeUVMap", name="inkLayer1uv", label="Ink Layer 1 UV", xpos=-1200, ypos=1000)
-
-        # Add links
-        NodeService.add_link(node_tree, mix_node, color_control, "ResultingColor", "InkLayerColor")
-        NodeService.add_link(node_tree, mix_node, color_control, "ResultingAlpha", "InkLayerStrength")
-        NodeService.add_link(node_tree, texture, mix_node, "Color", "LowerLayerColor")
-        NodeService.add_link(node_tree, texture, mix_node, "Alpha", "LowerLayerAlpha")
-        NodeService.add_link(node_tree, uvmap, texture, "UV", "Vector")
-
-        # Add a link from the diffuse texture if it exists
-        if diffuse_texture:
-            NodeService.add_link(node_tree, diffuse_texture, mix_node, "Color", "BackgroundColor")
-
-        return uvmap, texture
-
-    @staticmethod
-    def _layered_secondary_ink_layer_nodes(material: bpy.types.Material) -> InkLayerNodes:
-        """Add an additional ink layer, stacking it over the pre-existing ones."""
-
-        if not material:
-            raise ValueError("A material must be provided")
-
-        material_type = MaterialService.identify_material(material)
-
-        if material_type != "layered_skin":
-            raise ValueError("This method only works with layered skin materials")
-
-        _LOG.debug("material", material)
-
-        number_of_layers = MaterialService.get_number_of_ink_layers(material)
-        _LOG.debug("Number of layers", number_of_layers)
-
-        node_tree = typing.cast(bpy.types.NodeTree, material.node_tree)
-
-        color_control: bpy.types.Node | None = None
-        diffuse_texture: bpy.types.Node | None = None
-        for node in node_tree.nodes:
-            _LOG.debug("node", (node, node.name, node.type))
-            if node.type == "GROUP" and node.name == "colorgroup":
-                color_control = node
-            if node.name == "DiffuseTexture":
-                diffuse_texture = node
-
-        if color_control is None:
-            raise ValueError("Could not find a color control group in the material. Not a layered material?")
-
-        ybase = 300 * number_of_layers
-
-        lnum = number_of_layers + 1
-
-        # Create an image texture node
-        texture = NodeService.create_image_texture_node(node_tree, f"inkLayer{lnum}tex", f"Ink layer {lnum} Texture", xpos=-900, ypos=ybase + 1100)
-
-        # Create an uv map node
-        uvmap = NodeService.create_node(node_tree, "ShaderNodeUVMap", name=f"inkLayer{lnum}uv", label=f"Ink Layer {lnum} UV", xpos=-1200, ypos=ybase + 1000)
-
-        NodeService.add_link(node_tree, uvmap, texture, "UV", "Vector")
-
-        if number_of_layers > 1:
-            mix_node = NodeWrapperMpfbAlphaMixer.create_instance(node_tree, name=f"inkLayer{number_of_layers}mix", label=f"Ink Layer {number_of_layers} Mix")
-            _LOG.debug("mix_node", mix_node)
-            mix_node.location.x = -300
-            mix_node.location.y = ybase + 1000
-        # Socket default values; see the note at the top of the module.
-            upper_color = typing.cast(bpy.types.NodeSocketColor, mix_node.inputs["UpperLayerColor"])
-            upper_alpha = typing.cast(bpy.types.NodeSocketFloat, mix_node.inputs["UpperLayerAlpha"])
-            upper_color.default_value = (0.0, 0.0, 0.0, 1.0)  # pyright: ignore[reportAttributeAccessIssue]
-            upper_alpha.default_value = 0.0
-
-            last_mix_node = NodeService.find_node_by_name(node_tree, f"inkLayer{number_of_layers - 1}mix")
-            if last_mix_node is None:
-                raise ValueError(f"No such node: inkLayer{number_of_layers - 1}mix")
-            last_tex_node = NodeService.find_node_by_name(node_tree, f"inkLayer{number_of_layers}tex")
-            if last_tex_node is None:
-                raise ValueError(f"No such node: inkLayer{number_of_layers}tex")
-
-            NodeService.remove_link(node_tree, last_mix_node, "UpperLayerColor")
-            NodeService.remove_link(node_tree, last_mix_node, "UpperLayerAlpha")
-
-            NodeService.add_link(node_tree, mix_node, last_mix_node, "ResultingColor", "UpperLayerColor")
-            NodeService.add_link(node_tree, mix_node, last_mix_node, "ResultingAlpha", "UpperLayerAlpha")
-
-            NodeService.add_link(node_tree, last_tex_node, mix_node, "Color", "LowerLayerColor")
-            NodeService.add_link(node_tree, last_tex_node, mix_node, "Alpha", "LowerLayerAlpha")
-
-        else:
-            # This branch runs for the second layer, so layer one's mixer exists. The two sibling
-            # lookups above raise on a missing node rather than casting; this one is the odd one
-            # out, which is why the cast is here and not another raise.
-            mix_node = typing.cast(bpy.types.Node, NodeService.find_node_by_name(node_tree, "inkLayer1mix"))
-            _LOG.debug("mix_node", mix_node)
-
-        NodeService.add_link(node_tree, texture, mix_node, "Color", "UpperLayerColor")
-        NodeService.add_link(node_tree, texture, mix_node, "Alpha", "UpperLayerAlpha")
-
-        # Add a link from the diffuse texture if it exists
-        if diffuse_texture:
-            NodeService.add_link(node_tree, diffuse_texture, mix_node, "Color", "BackgroundColor")
-
-        return uvmap, texture
-
-    @staticmethod
     def add_focus_nodes(material: bpy.types.Material, uv_map_name: str | None = None) -> tuple[bpy.types.Node, bpy.types.Node, int]:
         """Add a node setup for a focus."""
 
@@ -824,15 +592,15 @@ class MaterialService():
 
         material_type = MaterialService.identify_material(material)
 
-        if material_type not in ["makeskin", "layered_skin"]:
-            raise ValueError("The material must be makeskin or layered skin")
+        if material_type != "makeskin":
+            raise ValueError("The material must be makeskin")
 
         _LOG.debug("material", material)
 
         number_of_layers = MaterialService.get_number_of_ink_layers(material)
         _LOG.debug("Number of layers", number_of_layers)
 
-        # The four branches below are exhaustive for the two material types the guard above allows, but
+        # The two branches below are exhaustive for the material type the guard above allows, but
         # the checker cannot see that, so the pair is bound once up front.
         uvmap_node: bpy.types.Node
         texture_node: bpy.types.Node
@@ -844,17 +612,10 @@ class MaterialService():
             _LOG.debug("Adding a secondary ink layer")
             uvmap_node, texture_node = MaterialService._makeskin_secondary_ink_layer_nodes(material)
 
-        if material_type == "layered_skin" and number_of_layers == 0:
-            uvmap_node, texture_node = MaterialService._layered_first_ink_layer_nodes(material)
-
-        if material_type == "layered_skin" and number_of_layers > 0:
-            _LOG.debug("Adding a secondary ink layer")
-            uvmap_node, texture_node = MaterialService._layered_secondary_ink_layer_nodes(material)
-
         if uv_map_name is not None and uvmap_node is not None:
             typing.cast(bpy.types.ShaderNodeUVMap, uvmap_node).uv_map = uv_map_name
 
-        # The four branches are exhaustive for the two material types the guard at the top of the method
+        # The two branches are exhaustive for the material type the guard at the top of the method
         # allows, so neither name can be unbound here, but the checker cannot follow that.
         return typing.cast(bpy.types.Node, uvmap_node), typing.cast(bpy.types.Node, texture_node), number_of_layers + 1
 
@@ -865,8 +626,8 @@ class MaterialService():
         if not material:
             raise ValueError("A material must be provided")
 
-        if MaterialService.identify_material(material) not in ["makeskin", "layered_skin"]:
-            raise ValueError("The material must be makeskin or layered_skin")
+        if MaterialService.identify_material(material) != "makeskin":
+            raise ValueError("The material must be makeskin")
 
         max_layer_number = 0
 
@@ -888,8 +649,8 @@ class MaterialService():
         if not material:
             raise ValueError("A material must be provided")
 
-        if MaterialService.identify_material(material) not in ["makeskin", "layered_skin"]:
-            raise ValueError("The material must be makeskin or layered skin material")
+        if MaterialService.identify_material(material) != "makeskin":
+            raise ValueError("The material must be a makeskin material")
 
         tex_name = f"inkLayer{ink_layer}tex"
         uv_name = f"inkLayer{ink_layer}uv"
@@ -979,7 +740,7 @@ class MaterialService():
         material_type = MaterialService.identify_material(material)
         _LOG.debug("Material type:", material_type)
 
-        if material_type not in ["makeskin", "layered_skin"]:
+        if material_type != "makeskin":
             _LOG.warn("Not a compatible material type")
             return
 

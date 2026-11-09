@@ -24,7 +24,7 @@ def test_load_skin_on_basemesh():
     testdata = LocationService.get_mpfb_test("testdata")
     mhmat = os.path.join(testdata, "better_socks_low.mhmat")
     with HumanFixture() as fixture:
-        ASSET_SETTINGS_PROPERTIES.set_value("skin_type", "MAKESKIN", entity_reference=bpy.context.scene)
+        ASSET_SETTINGS_PROPERTIES.set_value("skin_type", "STYLIZED", entity_reference=bpy.context.scene)
         mockself = MockOperatorBase(filepath=mhmat)
         result = MPFB_OT_Load_Library_Skin_Operator.hardened_execute(mockself, bpy.context)
         mockself.mock_report.assert_no_errors()

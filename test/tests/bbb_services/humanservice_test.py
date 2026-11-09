@@ -43,7 +43,7 @@ HUMAN_PRESET_DICT = {
         "proxy": "",
         "rig": "default",
         "skin_material_settings": {},
-        "skin_material_type": "ENHANCED_SSS",
+        "skin_material_type": "STYLIZED",
         "skin_mhmat": "middleage_caucasian_female/middleage_caucasian_female.mhmat",
         "targets": [
             {
@@ -165,22 +165,8 @@ def test_set_character_skin_with_missing_mhmat():
     recorder = _ReportRecorder()
     missing = os.path.join(LocationService.get_mpfb_test("testdata"), "no_such_skin.mhmat")
     assert not os.path.exists(missing)
-    HumanService.set_character_skin(missing, basemesh, skin_type="MAKESKIN", operator=recorder)
+    HumanService.set_character_skin(missing, basemesh, skin_type="STYLIZED", operator=recorder)
     assert recorder.warnings_containing("no_such_skin.mhmat")
-    ObjectService.delete_object(basemesh)
-
-
-def test_set_character_skin_with_missing_mhmat_layered():
-    """HumanService.set_character_skin() -- LAYERED skins are still built without an mhmat"""
-    basemesh = HumanService.create_human()
-    assert basemesh is not None
-    recorder = _ReportRecorder()
-    missing = os.path.join(LocationService.get_mpfb_test("testdata"), "no_such_skin.mhmat")
-    assert not os.path.exists(missing)
-    HumanService.set_character_skin(missing, basemesh, skin_type="LAYERED", operator=recorder)
-    assert recorder.warnings_containing("no_such_skin.mhmat")
-    # LAYERED does not need an mhmat, so the v2 skin should have been created anyway
-    assert MaterialService.has_materials(basemesh)
     ObjectService.delete_object(basemesh)
 
 
@@ -193,28 +179,6 @@ def test_add_builtin_rig_standard():
     assert basemesh.parent == rig
     ObjectService.delete_object(basemesh)
     ObjectService.delete_object(rig)
-
-
-def test_serialize_v2_skin():
-    """HumanService.serialize_to_json_string() -- v2 skin"""
-    basemesh = HumanService.create_human()
-    assert basemesh is not None
-    human_info = HumanService._create_default_human_info_dict()
-    assert human_info
-    assert human_info["skin_material_type"] == "NONE"
-    assert len(human_info["skin_material_settings"].keys()) == 0
-
-    name = ObjectService.random_name()
-    MaterialService.create_v2_skin_material(name, basemesh)
-
-    HumanService._populate_human_info_with_skin_info(human_info, basemesh)
-
-    assert human_info["skin_material_type"] == "LAYERED"
-    assert len(human_info["skin_material_settings"].keys()) > 0
-    assert "color" in human_info["skin_material_settings"]
-    assert "DiffuseTextureStrength" in human_info["skin_material_settings"]["color"]
-
-    ObjectService.delete_object(basemesh)
 
 
 def test_deserialize_from_dict():

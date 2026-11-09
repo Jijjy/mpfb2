@@ -13,7 +13,6 @@ from ..... import ClassManager
 from .....entities.socketobject.socketbodyobject import SocketBodyObject
 from .....entities.socketobject.socketproxyobject import SocketProxyObject
 from .....entities.material.makeskinmaterial import MakeSkinMaterial
-from .....entities.material.enhancedskinmaterial import EnhancedSkinMaterial
 from .....entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
 import bpy, os, json
 
@@ -146,10 +145,9 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         mh_material = None
 
         if basic_type in ["Bodyproxy", "Basemesh"]:
-            if ui["skin_material_type"] == "PLAIN":
-                mh_material = MakeSkinMaterial()
-            else:
-                mh_material = EnhancedSkinMaterial(ui)
+            # TODO(grind): F9ZLJW removed the enhanced skin; the importer builds a MakeSkin body for every
+            # skin_material_type until it builds the STYLIZED skin and drops the enhanced-settings options.
+            mh_material = MakeSkinMaterial()
 
         if basic_type in ["Bodypart", "Eyes", "Clothes"]:
             if "Eye" in basic_type and ui["procedural_eyes"]:
@@ -169,14 +167,10 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
                 if mh_material != "procedural_eyes":
                     mh_material.populate_from_proxy_material_socket_call(proxy_info["uuid"])
 
-            if isinstance(mh_material, EnhancedSkinMaterial):
-                name = derived["prefix"] + derived["name"]
-                mh_material.apply_node_tree(blender_material, group_name=material_name)
+            if mh_material != "procedural_eyes":
+                mh_material.apply_node_tree(blender_material)
             else:
-                if mh_material != "procedural_eyes":
-                    mh_material.apply_node_tree(blender_material)
-                else:
-                    NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
+                NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
 
             diffuse_colors = MaterialService.get_diffuse_colors()
             if basic_type in diffuse_colors:

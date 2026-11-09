@@ -3,7 +3,7 @@
 import bpy
 import os
 from .... import dynamic_import, ObjectService
-from ..._helpers import MockOperatorBase, HumanFixture, BasemeshWithV2SkinFixture
+from ..._helpers import MockOperatorBase, HumanFixture, BasemeshWithMakeSkinFixture
 
 MPFB_OT_Set_Normalmap_Operator = dynamic_import(
     "mpfb.ui.operations.matops.operators.setnormalmap",
@@ -39,8 +39,8 @@ def test_set_normalmap_errors_without_material():
         mockself.mock_report.assert_reported('ERROR', "needs to have a material")
 
 
-def test_set_normalmap_executes_with_v2_skin():
-    with BasemeshWithV2SkinFixture() as fixture:
+def test_set_normalmap_executes_with_makeskin():
+    with BasemeshWithMakeSkinFixture() as fixture:
         mockself = MockOperatorBase(filepath=_TEST_PNG)
         result = MPFB_OT_Set_Normalmap_Operator.hardened_execute(mockself, bpy.context)
         assert result == {'FINISHED'}

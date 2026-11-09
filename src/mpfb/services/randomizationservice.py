@@ -57,7 +57,7 @@ _DEFAULT_SKIN_ASSET: dict = {
     "pack": "",
     "include": "",
     "exclude": "special_suit",
-    "skin_type": "MAKESKIN",
+    "skin_type": "STYLIZED",
     "material_instances": True
     }
 

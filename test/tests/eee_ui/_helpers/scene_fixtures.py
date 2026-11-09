@@ -1,6 +1,6 @@
 """Scene fixtures for UI tests: HumanFixture, HumanWithRigFixture, HumanWithRigAndClothesFixture, SceneSnapshot,
 BasemeshWithTargetFixture, TwoHumansWithRigsFixture, BasemeshWithMakeSkinFixture,
-BasemeshWithV2SkinFixture, TwoMixamoArmaturesFixture, OpenPoseRigFixture,
+BasemeshWithMakeSkinFixture, TwoMixamoArmaturesFixture, OpenPoseRigFixture,
 SceneWithCameraFixture."""
 
 import bpy
@@ -249,12 +249,13 @@ class BasemeshWithMakeSkinFixture:
         self.cleanup()
 
 
-class BasemeshWithV2SkinFixture:
-    """Creates a basemesh with a V2 skin material applied.
+class BasemeshWithMakeSkinFixture:
+    """Creates a basemesh with a MakeSkin material applied.
 
     Satisfies the precondition for MPFB_OT_Remove_Makeup_Operator and
-    MPFB_OT_Set_Normalmap_Operator, which require the active basemesh to have
-    a V2 skin material.
+    MPFB_OT_Set_Normalmap_Operator, which require a makeskin material (the
+    only type that carries ink layers and normal maps since the realistic
+    skins were removed).
     """
 
     def __init__(self):
@@ -263,20 +264,17 @@ class BasemeshWithV2SkinFixture:
         self._human_fixture = HumanFixture()
 
     def setup(self):
-        from ... import MaterialService, dynamic_import  # lazy import
+        import os
+        from ... import MaterialService, LocationService, dynamic_import  # lazy import
         self._human_fixture.setup()
         self.basemesh = self._human_fixture.basemesh
-
-        MPFB_OT_Create_V2_Skin_Operator = dynamic_import(
-            "mpfb.ui.operations.matops.operators.createv2skin",
-            "MPFB_OT_Create_V2_Skin_Operator"
-        )
-        from .mock_operator_base import MockOperatorBase
-        import bpy
-        result = MPFB_OT_Create_V2_Skin_Operator.hardened_execute(MockOperatorBase(), bpy.context)
-        assert result == {'FINISHED'}, f"BasemeshWithV2SkinFixture: v2 skin creation returned {result}"
-        assert MaterialService.has_materials(self.basemesh), "BasemeshWithV2SkinFixture: no material on basemesh"
-        self.material = self.basemesh.data.materials[0]
+        MakeSkinMaterial = dynamic_import("mpfb.entities.material.makeskinmaterial", "MakeSkinMaterial")
+        mhmat = os.path.join(LocationService.get_mpfb_test("testdata"), "materials", "almost_all_textures.mhmat")
+        self.material = MaterialService.create_empty_material("fixture.makeskin", self.basemesh)
+        makeskin = MakeSkinMaterial()
+        makeskin.populate_from_mhmat(mhmat)
+        makeskin.apply_node_tree(self.material)
+        assert MaterialService.identify_material(self.material) == "makeskin"
         return self
 
     def cleanup(self):

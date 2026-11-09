@@ -1,7 +1,0 @@
-{
-    "type": "string",
-    "name": "name",
-    "description": "name of the enhanced material settings to save",
-    "label": "Settings name",
-    "default": ""
-}
