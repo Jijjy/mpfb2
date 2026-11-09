@@ -237,7 +237,7 @@ class HumanService:
         group_node = NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, eyes_material.node_tree), "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" not in material_settings:
+            if "IrisInner" not in material_settings:
                 # Material exists, but does not seem procedural. Assume it is a MAKESKIN material
                 human_info["eyes_material_type"] = "MAKESKIN"
             else:
@@ -626,16 +626,12 @@ class HumanService:
 
         if material_type == "PROCEDURAL_EYES":
             MaterialService.delete_all_materials(clothes)
-            _LOG.debug("Setting up procedural eyes")
-            tree_dir = LocationService.get_mpfb_data("node_trees")
-            json_file_name = os.path.join(tree_dir, "procedural_eyes.json")
-            with open(json_file_name, "r", encoding="utf-8") as json_file:
-                node_tree_dict = json.load(json_file)
-            _LOG.dump("procedural_eyes", node_tree_dict)
+            # PROCEDURAL_EYES is the stored id of the STYLIZED_EYES material (STYLIZED_SPEC.md 7.2):
+            # one opaque Principled BSDF, no transmission shell, no alpha blend.
+            _LOG.debug("Setting up stylized eyes")
+            from ..entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
             blender_material = MaterialService.create_empty_material(name, clothes)
-            NodeService.apply_node_tree_from_dict(typing.cast(bpy.types.NodeTree, blender_material.node_tree), node_tree_dict, True)
-            blender_material.blend_method = "BLEND"
-            blender_material.show_transparent_back = True
+            NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
             blender_material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
 
         ClothesService.fit_clothes_to_human(clothes, basemesh, mhclo)
@@ -1003,7 +999,7 @@ class HumanService:
         group_node = NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, material.node_tree), "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" in material_settings:
+            if "IrisInner" in material_settings:
                 _LOG.dump("will try to apply settings", settings)
                 NodeService.set_socket_default_values(group_node, settings)
             else:

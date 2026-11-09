@@ -122,7 +122,7 @@ class MaterialService():
                 _LOG.debug("node_info", node_info)
                 if "Pore detail" in node_info["values"]:
                     return "enhanced_skin"
-                if "IrisSection4Color" in node_info["values"]:
+                if "IrisInner" in node_info["values"]:
                     return "procedural_eyes"
                 if "NavelCenterOverride" in node_info["values"]:
                     return "layered_skin"

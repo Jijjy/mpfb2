@@ -1,6 +1,6 @@
 """This file provides UI for saving/loading eye material settings"""
 
-import os, bpy, shutil
+import os, bpy, shutil, json
 from .... import ClassManager
 from ....services import LogService
 from ....services import LocationService
@@ -83,6 +83,14 @@ def ensure_eye_settings_default_exists():
     If not, copy it from the data directory."""
     _LOG.enter()
     default_json = LocationService.get_user_config("eye_settings.default.json")
+    if os.path.exists(default_json):
+        with open(default_json, "r", encoding="utf-8") as json_file:
+            existing = json.load(json_file)
+        if "IrisInner" not in existing:
+            # A default written for the old procedural eyes. Its keys match no input on the
+            # stylized eyes group, so applying it would change nothing. Replace it.
+            _LOG.warn("The default eye settings use the old procedural eyes keys. Will replace", default_json)
+            os.remove(default_json)
     if not os.path.exists(default_json):
         _LOG.warn("The default eye settings do not exist. Will create at", default_json)
         template_settings = LocationService.get_mpfb_data("settings")

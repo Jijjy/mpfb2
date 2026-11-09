@@ -31,7 +31,7 @@ def _save_material(self, context, file_name):
     group_node = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeGroup")
     if group_node:
         material_settings = NodeService.get_socket_default_values(group_node)
-        if "IrisMinorColor" not in material_settings:
+        if "IrisInner" not in material_settings:
             self.report({'ERROR'}, "Eyes do not seem to have procedural eyes material")
             return {'FINISHED'}
     else:

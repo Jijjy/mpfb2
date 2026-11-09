@@ -66,7 +66,7 @@ class MPFB_OT_ApplyEyeSettingsOperator(MpfbOperator):
         group_node = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" in material_settings:
+            if "IrisInner" in material_settings:
                 _LOG.debug("will try to apply settings", settings)
                 NodeService.set_socket_default_values(group_node, settings)
             else:

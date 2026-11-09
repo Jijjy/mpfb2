@@ -14,6 +14,7 @@ from .....entities.socketobject.socketbodyobject import SocketBodyObject
 from .....entities.socketobject.socketproxyobject import SocketProxyObject
 from .....entities.material.makeskinmaterial import MakeSkinMaterial
 from .....entities.material.enhancedskinmaterial import EnhancedSkinMaterial
+from .....entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
 import bpy, os, json
 
 _LOG = LogService.get_logger("newhuman.importhuman")
@@ -175,12 +176,7 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
                 if mh_material != "procedural_eyes":
                     mh_material.apply_node_tree(blender_material)
                 else:
-                    tree_dir = LocationService.get_mpfb_data("node_trees")
-                    json_file_name = os.path.join(tree_dir, "procedural_eyes.json")
-                    with open(json_file_name, "r") as json_file:
-                        node_tree_dict = json.load(json_file)
-                    _LOG.dump("procedural_eyes", node_tree_dict)
-                    NodeService.apply_node_tree_from_dict(blender_material.node_tree, node_tree_dict, True)
+                    NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
 
             diffuse_colors = MaterialService.get_diffuse_colors()
             if basic_type in diffuse_colors:
@@ -435,7 +431,7 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         if group_node:
             values = NodeService.get_socket_default_values(group_node)
             _LOG.dump("Current socket values", values)
-            if "IrisMajorColor" in values:
+            if "IrisInner" in values:
                 _LOG.debug("will try to apply settings", settings)
                 NodeService.set_socket_default_values(group_node, settings)
             else:
