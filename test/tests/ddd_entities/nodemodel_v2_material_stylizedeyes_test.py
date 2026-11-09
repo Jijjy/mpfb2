@@ -35,4 +35,13 @@ def test_stylized_eyes_shader():
     assert not principled.inputs["Transmission Weight"].is_linked
     assert principled.inputs["Transmission Weight"].default_value == approx(0.0)
     assert not any(node.bl_idname == "ShaderNodeBsdfTransparent" for node in group_nodes)
+
+    # The catchlight ellipse (iris-local units) overlaps the pupil edge, where white on black
+    # reads, and stays inside the iris, clear of the limbal ring
+    center_x = group_nodes["Catchlight X"].inputs[1].default_value
+    center_y = group_nodes["Catchlight center"].inputs["Y"].default_value
+    center_r = (center_x ** 2 + center_y ** 2) ** 0.5
+    size = settings["CatchlightSize"]
+    assert center_r - size < settings["PupilSize"] < center_r
+    assert center_r + size < 1.0 - settings["LimbalRingWidth"]
     NodeService.destroy_node_tree(node_tree)

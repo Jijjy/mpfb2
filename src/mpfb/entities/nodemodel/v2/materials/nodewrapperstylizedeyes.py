@@ -39,9 +39,11 @@ EYE_CENTER_1 = [0.295, 0.30, 0.0]
 EYE_CENTER_2 = [0.705, 0.70, 0.0]
 EYEBALL_UV_RADIUS = 0.285
 
-# Catchlight centre in iris-local units (iris radius = 1): outward and up
-CATCHLIGHT_OFFSET_OUT = 0.42
-CATCHLIGHT_OFFSET_UP = 0.42
+# Catchlight centre in iris-local units (iris radius = 1): outward and up, close enough to
+# the pupil that the ellipse overlaps its edge (white on black reads at any size) and low
+# enough that the upper lid of a neutral face does not cover it
+CATCHLIGHT_OFFSET_OUT = 0.35
+CATCHLIGHT_OFFSET_UP = 0.3
 # Height of the catchlight ellipse relative to its width
 CATCHLIGHT_ASPECT = 0.7
 
@@ -63,7 +65,7 @@ DEFAULT_SETTINGS = {
     "PupilSize": 0.35,
     "CatchlightColor": [1.0, 1.0, 1.0, 1.0],
     "CatchlightStrength": 1.5,
-    "CatchlightSize": 0.2,
+    "CatchlightSize": 0.28,
     "Roughness": 0.05,
     "Coat": 0.5
     }
