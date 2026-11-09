@@ -84,7 +84,7 @@ The displayed asset list is filtered against the three `APAS_` filter properties
 
 This panel collects all configuration that controls how assets are loaded. It is divided into several boxes:
 
-- **Materials** — selects the material type for skins (`skin_type`), clothes and hair (`clothes_type`), and eyes (`eyes_type`), plus the material instances toggle (`material_instances`).
+- **Materials** — selects the material type for skins (`skin_type`), clothes and hair (`clothes_type`), and eyes (`eyes_type`).
 - **Clothes, Bodyparts & Proxies** — controls fitting and rigging behaviour: `fit_to_body`, `mask_base_mesh`, `delete_group`, `specific_delete_group`, `set_up_rigging`, `interpolate_weights`, `import_subrig`, `import_weights`, `add_subdiv_modifier`, `subdiv_levels`, and `makeclothes_metadata`.
 - **Install assets** — two buttons that open file browsers: "Load pack from zip file" (`mpfb.load_pack`) and "Install custom target" (`mpfb.install_target`).
 - **Asset roots** — lets the user override the secondary asset root directory (`second_root`). Changing this value triggers a full rescan of all asset lists via `AssetService.update_all_asset_lists()`.
@@ -206,7 +206,7 @@ If no matching proxy can be found, the operator reports an error and does nothin
 
 Applies a skin material (`.mhmat` file) to the character's basemesh and optional body proxy. Steps:
 
-1. Reads `skin_type` and `material_instances` from `ASSET_SETTINGS_PROPERTIES`. Note that `material_instances` is forced to `False` for `LAYERED`, `GAMEENGINE`, and `MAKESKIN` skin types, since those types do not support multiple material instances.
+1. Reads `skin_type` from `ASSET_SETTINGS_PROPERTIES`.
 2. Finds the basemesh and any body proxy from the active object or its relatives.
 3. Calls `HumanService.set_character_skin()` with the `.mhmat` path, basemesh, optional body proxy, skin type, and material instances flag.
 4. Sets the active material slot to the "Body" material on both the basemesh and body proxy (if present).
@@ -324,7 +324,6 @@ Loaded from JSON files in `src/mpfb/ui/apply_assets/assetlibrary/properties/` wi
 | `skin_type` | enum | `MAKESKIN` | Material type for skin: `GAMEENGINE` (simple PBR for export), `MAKESKIN` (PBR with image textures), `ENHANCED` (adds procedural aspects), `ENHANCED_SSS` (Enhanced plus subsurface scattering), `LAYERED` (most complex multilayered procedural skin) |
 | `clothes_type` | enum | `MAKESKIN` | Material type for clothes and hair: `GAMEENGINE` or `MAKESKIN` |
 | `eyes_type` | enum | `MAKESKIN` | Material type for eyes: `GAMEENGINE`, `MAKESKIN`, or `PROCEDURAL_EYES` (fully procedural with dynamic colour controls) |
-| `material_instances` | boolean | `true` | When using Enhanced skin, create material instances for extra vertex groups (e.g. fingernails get a separate material slot alongside the body material) |
 | `fit_to_body` | boolean | `true` | Deform the imported clothes to match the character's current body shape |
 | `mask_base_mesh` | boolean | `true` | When loading a body proxy, add a Mask modifier to the basemesh to hide it where the proxy covers |
 | `delete_group` | boolean | `true` | Create (or update) a delete group on the basemesh that marks the vertices hidden under the clothes |

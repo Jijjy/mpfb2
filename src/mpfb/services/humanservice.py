@@ -991,13 +991,6 @@ class HumanService:
         scale = deserialization_settings["scale"]
         subdiv_levels = deserialization_settings["subdiv_levels"]
         load_clothes = deserialization_settings["load_clothes"]
-        material_instances = deserialization_settings["material_instances"]
-
-        if material_instances:
-            human_info["material_instances"] = material_instances
-        else:
-            human_info["material_instances"] = "NEVER"
-
         if human_info is None:
             raise ValueError('Cannot use None as human_info')
         if len(human_info.keys()) < 1:
@@ -1104,8 +1097,7 @@ class HumanService:
             "subdiv_levels": 1,
             "load_clothes": True,
             "override_skin_model": "PRESET",
-            "override_rig": "PRESET",
-            "material_instances": "NEVER"
+            "override_rig": "PRESET"
             }
 
     @staticmethod

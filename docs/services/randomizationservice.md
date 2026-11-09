@@ -54,7 +54,6 @@ sub-features can add sibling sections without breaking older presets:
       "include": "",               # keep skins whose name contains any of these keywords
       "exclude": "special_suit",   # drop skins whose name contains any of these keywords
       "skin_type": "MAKESKIN",     # GAMEENGINE | MAKESKIN | ENHANCED | ENHANCED_SSS | LAYERED
-      "material_instances": True
     },
     "eyes": {                      # eyes are a drop-down, not a randomized pool
       "mode": "LOWPOLY",           # DONOTADD | HIGHPOLY | LOWPOLY

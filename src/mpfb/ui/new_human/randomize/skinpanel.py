@@ -33,8 +33,7 @@ class MPFB_PT_Randomize_Skin_Panel(Abstract_Panel):
             "skin_pack",
             "skin_include",
             "skin_exclude",
-            "skin_type",
-            "skin_material_instances"
+            "skin_type"
             ])
 
 

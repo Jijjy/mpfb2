@@ -52,8 +52,7 @@ class MPFB_PT_Asset_Settings_Panel(Abstract_Panel):
         ASSET_SETTINGS_PROPERTIES.draw_properties(scene, box, [
             "skin_type",
             "clothes_type",
-            "eyes_type",
-            "material_instances"
+            "eyes_type"
             ])
 
     def _advanced(self, scene, layout):

@@ -51,7 +51,6 @@ This panel draws a single settings area with:
 - `override_rig` (dynamic dropdown) — lets you use a different rig than the one stored in the preset
 - `auto_generate_rigify`, `meta_rig_action` — auto-generate the full Rigify rig after deserialization when the loaded character ends up with a Rigify meta rig (default on). The "Meta-rig:" enum (keep / hide / delete, default hide) is greyed out when `auto_generate_rigify` is off.
 - `override_skin_model`, `override_clothes_model`, `override_eyes_model` — material model overrides
-- `material_instances`
 - `preselect_group`, `detailed_helpers`, `extra_vertex_groups`, `mask_helpers`
 - `load_clothes`, `bodypart_deep_search`, `clothes_deep_search`
 - Two operator buttons: **Create human** (`mpfb.human_from_presets`) and **Import MHM** (`mpfb.human_from_mhm`)
@@ -88,7 +87,7 @@ Recreates a complete character from a saved MPFB preset file. The preset file mu
 
 Steps:
 1. Looks up the preset filename as `human.{available_presets}.json`.
-2. Builds a deserialization settings dictionary using `HumanService.get_default_deserialization_settings()`, then populates it from the panel: `detailed_helpers`, `extra_vertex_groups`, `mask_helpers`, `load_clothes`, `override_rig`, `override_skin_model`, `override_clothes_model`, `override_eyes_model`, `material_instances`.
+2. Builds a deserialization settings dictionary using `HumanService.get_default_deserialization_settings()`, then populates it from the panel: `detailed_helpers`, `extra_vertex_groups`, `mask_helpers`, `load_clothes`, `override_rig`, `override_skin_model`, `override_clothes_model`, `override_eyes_model`.
 3. Checks whether Rigify is available if the chosen rig requires it (`SystemService.check_for_rigify()`).
 4. Calls `HumanService.deserialize_from_json_file()` with the resolved filename and deserialization settings.
 5. After creation, pre-selects `preselect_group` on both the basemesh and any proxy mesh. If a rig was created, makes it the active object.
@@ -135,7 +134,6 @@ Both `MPFB_PT_NewHuman_Panel` and `MPFB_PT_From_Presets_Panel` read properties f
 | `meta_rig_action` | enum | `"hide"` | Used by `MPFB_PT_From_Presets_Panel`. Label "Meta-rig:". What to do with the loaded Rigify meta rig after auto-generation. Options: `keep` (leave it visible), `hide` (recommended default — `hide_viewport` and `hide_render`, but the meta rig stays in the scene so Rigify's in-place re-generation works and any action layers on it survive), `delete` (remove it entirely). Greyed out unless `auto_generate_rigify` is enabled. |
 | `load_clothes` | boolean | `true` | Load the clothes that are referenced in the preset file. If disabled, only the body is created. |
 | `mask_helpers` | boolean | `true` | Add a MASK modifier to the basemesh to hide the helper geometry in the viewport while keeping it available for rigging and other operations. |
-| `material_instances` | enum | `"ENHANCED"` | Whether and how to create material instances for body vertex groups (nipple, lips, etc.). Options: `NEVER` (no instances), `ENHANCED` (enhanced skin instances), `ENHANCEDMS` (enhanced multiscatter instances). |
 | `override_clothes_model` | enum | `"PRESET"` | Override the material model used for clothes, ignoring what is stored in the preset. Options: `NONE` (no override), `PRESET` (use preset value), `GAMEENGINE`, `MAKESKIN`. |
 | `override_eyes_model` | enum | `"PRESET"` | Override the material model used for eyes. Options: `NONE`, `PRESET`, `GAMEENGINE`, `MAKESKIN`, `PROCEDURAL_EYES`. |
 | `override_skin_model` | enum | `"PRESET"` | Override the skin material model. Options: `NONE`, `PRESET`, `GAMEENGINE`, `MAKESKIN`, `ENHANCED`, `ENHANCED_SSS`, `LAYERED`. |

@@ -462,7 +462,6 @@ def scene_to_spec(scene: "bpy.types.Scene") -> dict:
     skin["include"] = RANDOMIZE_PROPERTIES.get_value("skin_include", entity_reference=scene)
     skin["exclude"] = RANDOMIZE_PROPERTIES.get_value("skin_exclude", entity_reference=scene)
     skin["skin_type"] = RANDOMIZE_PROPERTIES.get_value("skin_type", entity_reference=scene)
-    skin["material_instances"] = RANDOMIZE_PROPERTIES.get_value("skin_material_instances", entity_reference=scene)
 
     # The bodypart sections. The default spec already carries every subsection, so only their
     # values are overwritten here. The shared asset material applies to all bodyparts but eyes.
@@ -608,7 +607,6 @@ def spec_to_scene(spec: dict, scene: "bpy.types.Scene") -> None:
     RANDOMIZE_PROPERTIES.set_value("skin_include", skin["include"], entity_reference=scene)
     RANDOMIZE_PROPERTIES.set_value("skin_exclude", skin["exclude"], entity_reference=scene)
     RANDOMIZE_PROPERTIES.set_value("skin_type", skin["skin_type"], entity_reference=scene)
-    RANDOMIZE_PROPERTIES.set_value("skin_material_instances", skin["material_instances"], entity_reference=scene)
 
     # The bodypart sections. The shared asset material applies to all bodyparts but eyes.
     RANDOMIZE_PROPERTIES.set_value("asset_material_type", assets["asset_material_type"], entity_reference=scene)

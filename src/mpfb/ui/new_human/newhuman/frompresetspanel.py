@@ -91,7 +91,6 @@ class MPFB_PT_From_Presets_Panel(Abstract_Panel):
 
         box = self.create_box(layout, "Various")
         PRESETS_HUMAN_PROPERTIES.draw_properties(scene, box, [
-            "material_instances",
             "preselect_group",
             "detailed_helpers",
             "extra_vertex_groups",

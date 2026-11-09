@@ -80,7 +80,7 @@ The panel package is split so that each sub-panel is its own module and the shar
   apply to detail values — a picked category's weight is drawn uniformly in `[0.25 × deviation, deviation]` so every pick is visible.
 - **Skin** (`MPFB_PT_Randomize_Skin_Panel`, `bl_order` 6, collapsed) — the skin material randomization settings, top to bottom: the `randomize_skin` master
   toggle; the `match_gender` / `match_age` / `match_race` phenotype-filter checkboxes; the `skin_fallback` toggle; the `skin_pack`, `skin_include` and
-  `skin_exclude` name filters; and the `skin_type` and `skin_material_instances` settings applied to the picked material. When on, the created human gets a
+  `skin_exclude` name filters; and the `skin_type` setting applied to the picked material. When on, the created human gets a
   randomly picked installed skin instead of the default material. Filtering, fallback and the substring-matching rules live in
   [`RandomizationService.pick_random_skin`](../../services/randomizationservice.md); the panel only stores the settings and the operator discovers the installed
   skins. **Reproducibility caveat:** unlike the phenotype, the picked skin also depends on the set of installed skin assets, so the same preset and seed only
@@ -323,7 +323,6 @@ The panel loads its global and creation settings from `src/mpfb/ui/new_human/ran
 | `skin_include` | string | `""` | Comma-separated keywords; keep only skins whose name contains at least one of them. Empty allows all names. |
 | `skin_exclude` | string | `"special_suit"` | Comma-separated keywords; never pick skins whose name contains any of them. Defaults to excluding the system pack's painted-on clothing textures. |
 | `skin_type` | enum | `"MAKESKIN"` | Skin material type used for the picked skin. Same options as the asset library: `GAMEENGINE`, `MAKESKIN`, `ENHANCED`, `ENHANCED_SSS`, `LAYERED`. |
-| `skin_material_instances` | boolean | `true` | Create material instances for extra vertex groups. Forced off internally for the LAYERED, GAMEENGINE and MAKESKIN skin types. |
 | `auto_generate_rigify` | boolean | `true` | If the chosen rig is a Rigify metarig, also generate the full Rigify rig from it after the body parts are attached. |
 | `meta_rig_action` | enum | `"hide"` | What to do with the metarig after generating the full Rigify rig: `keep`, `hide` or `delete`. |
 | `asset_material_type` | enum | `"MAKESKIN"` | Material type for the attached body parts (all except eyes). Options: `GAMEENGINE`, `MAKESKIN`. |

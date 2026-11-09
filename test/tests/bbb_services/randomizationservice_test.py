@@ -382,7 +382,6 @@ def test_default_spec_has_skin_assets():
     assert skin["include"] == ""
     assert skin["exclude"] == "special_suit"
     assert skin["skin_type"] == "STYLIZED"
-    assert skin["material_instances"] is True
 
 
 def test_skin_gender_label_splits_at_half():

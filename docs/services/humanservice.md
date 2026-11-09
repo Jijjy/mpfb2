@@ -224,8 +224,8 @@ Reconstruct a full character from a `human_info` dictionary and deserialization 
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `human_info` | `HumanInfo` | — | Character definition dictionary (phenotype, rig, assets, materials, etc.). The method writes `material_instances` into the dict it is handed |
-| `deserialization_settings` | `DeserializationSettings` | — | Settings controlling the deserialization process (see `get_default_deserialization_settings`). `mask_helpers`, `detailed_helpers`, `extra_vertex_groups`, `feet_on_ground`, `scale`, `subdiv_levels`, `load_clothes` and `material_instances` are read directly and must be present |
+| `human_info` | `HumanInfo` | — | Character definition dictionary (phenotype, rig, assets, materials, etc.). |
+| `deserialization_settings` | `DeserializationSettings` | — | Settings controlling the deserialization process (see `get_default_deserialization_settings`). `mask_helpers`, `detailed_helpers`, `extra_vertex_groups`, `feet_on_ground`, `scale`, `subdiv_levels` and `load_clothes` are read directly and must be present |
 
 **Returns:** `bpy.types.Object` — The created basemesh object.
 
@@ -280,7 +280,6 @@ Return a dictionary with default values for all deserialization options.
 | `load_clothes` | `True` | Equip clothes from the preset |
 | `override_skin_model` | `"PRESET"` | Skin material override (`"PRESET"` uses the saved value) |
 | `override_rig` | `"PRESET"` | Rig override (`"PRESET"` uses the saved value, `"NONE"` skips rig) |
-| `material_instances` | `"NEVER"` | Material instance mode for enhanced skins |
 
 The dict does not carry `clothes_deep_search` or `bodypart_deep_search`, so it cannot be passed to
 `deserialize_from_mhm()` unchanged; the MHM operator adds both before calling it.

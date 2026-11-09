@@ -39,7 +39,7 @@ class MPFB_OT_HumanFromPresetsOperator(MpfbOperator):
         ctx.populate_dict(deserialization_settings, [
             "detailed_helpers", "extra_vertex_groups", "mask_helpers",
             "load_clothes", "override_rig", "override_skin_model",
-            "override_clothes_model", "override_eyes_model", "material_instances"
+            "override_clothes_model", "override_eyes_model"
         ])
 
         if "rigify" in deserialization_settings["override_rig"] and not SystemService.check_for_rigify():

@@ -45,9 +45,8 @@ _RACES: list[str] = ["asian", "caucasian", "african"]
 
 # The default "assets.skin" section. Skin randomization is on with all three phenotype
 # filters and the fallback relaxation enabled, no pack or include filter, and an exclude
-# filter that drops the painted-on clothing textures in the system pack. The skin_type and
-# material_instances mirror the asset library defaults so the same preset reproduces the
-# same material.
+# filter that drops the painted-on clothing textures in the system pack. The skin_type mirrors
+# the asset library default so the same preset reproduces the same material.
 _DEFAULT_SKIN_ASSET: dict = {
     "enabled": True,
     "match_gender": True,
@@ -57,8 +56,7 @@ _DEFAULT_SKIN_ASSET: dict = {
     "pack": "",
     "include": "",
     "exclude": "special_suit",
-    "skin_type": "STYLIZED",
-    "material_instances": True
+    "skin_type": "STYLIZED"
     }
 
 # The default section for a plain randomized bodypart type (eyebrows, eyelashes, teeth,
