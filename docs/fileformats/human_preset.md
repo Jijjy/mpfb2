@@ -76,10 +76,6 @@ Asset source paths for each body part slot. Each is a string (empty if no asset 
   pack is not installed, the list is preserved verbatim on the basemesh so it round-trips on
   re-save, but no shape-key values are written (the `!ex-*` keys do not exist).
 
-#### Makeup
-
-- `makeup` (array of strings) — File named pointing to Ink layer JSON files.
-
 #### Skin material
 
 - `skin_mhmat` (string) — Path to the MakeHuman material file used for the skin.
@@ -129,7 +125,6 @@ Asset source paths for each body part slot. Each is a string (empty if no asset 
     "clothes": [
         "clothes/male_casualsuit01"
     ],
-    "makeup": [],
     "skin_mhmat": "skins/young_caucasian_female/young_caucasian_female.mhmat",
     "skin_material_type": "ENHANCED",
     "skin_material_settings": {

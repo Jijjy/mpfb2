@@ -124,6 +124,6 @@ side.
 
 ### Compressed lookup tables
 
-The `mesh_metadata/` directory also contains `.json.gz` files with face and vertex topology lookup tables,
-and a `uv_layers/` subdirectory with compressed UV coordinate data. These are large machine-generated files
+The `mesh_metadata/` directory also contains `.json.gz` files with face and vertex topology lookup tables.
+These are large machine-generated files
 used internally by the mesh processing code.

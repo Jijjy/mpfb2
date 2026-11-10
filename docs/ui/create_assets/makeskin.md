@@ -148,5 +148,4 @@ These are defined in `makeskin/objectproperties/`:
 ## Related
 
 - [MakeClothes](makeclothes.md) — embeds a MakeSkin material when exporting clothes
-- [MakeUp](makeup.md) — adds ink/makeup overlay layers on top of a MakeSkin material
 - [MaterialService](../../services/materialservice.md) — the service underlying material creation and identification

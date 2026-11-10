@@ -4,7 +4,7 @@
 
 MaterialService handles the creation, identification, modification, and management of materials assigned to Blender objects within MPFB. It supports multiple material types, each with distinct node tree structures: **MakeSkin** (the standard MakeHuman material format), **enhanced skin** (procedural skin with pore detail), **layered skin** (procedural skin with color control groups), **procedural eyes**, and **game engine** (simple Principled BSDF).
 
-The service provides a complete material lifecycle: creating empty or skin-specific materials, assigning them to objects, creating per-body-part material slots, and loading/saving materials from `.blend` files. It also manages **ink layers** — stacked texture overlays used for makeup, tattoos, and other surface decorations — with support for adding, querying, and removing layers from both MakeSkin and layered skin materials.
+The service provides a complete material lifecycle: creating empty or skin-specific materials, assigning them to objects, creating per-body-part material slots, and loading/saving materials from `.blend` files.
 
 MaterialService also provides static viewport diffuse colors for different body parts and a color adjustment system that can read and apply tint modifications to materials. All methods are static; the class should never be instantiated.
 
@@ -17,12 +17,9 @@ MaterialService also provides static viewport diffuse colors for different body 
 | Dependency | Usage |
 |------------|-------|
 | `LogService` | Logging via `LogService.get_logger("services.materialservice")` |
-| `LocationService` | Resolving paths to UV layer data and asset directories |
 | `ObjectService` | Object activation, vertex group queries, material slot assignment |
 | `NodeService` | Shader node creation, linking, querying, and manipulation |
-| `MeshService` | Adding UV maps from dictionaries (for ink layer focus) |
 | `NodeWrapperSkin` | Creating the v2 enhanced skin node group |
-| `NodeWrapperMpfbAlphaMixer` | Creating alpha mixer nodes for ink layer blending |
 | `MakeSkinMaterial` | Parsing `.mhmat` files for texture references (imported at call time) |
 
 ## Material Type Identifiers
@@ -44,13 +41,12 @@ tests the rest of the module performs against the result are checked against the
 
 ## Module-Level Types
 
-Three annotation aliases are declared at module level. None is part of the calling contract beyond the
+Two annotation aliases are declared at module level. None is part of the calling contract beyond the
 shapes they describe.
 
 | Name | Definition | Notes |
 |------|------------|-------|
 | `MaterialType` | `Literal["empty", "enhanced_skin", "procedural_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]` | The seven answers `identify_material()` can give |
-| `InkLayerNodes` | `tuple[bpy.types.Node, bpy.types.Node]` | The `(uvmap_node, texture_node)` pair the four private ink layer builders return. The nodes are a `ShaderNodeUVMap` and a `ShaderNodeTexImage` at runtime. `NodeService.create_image_texture_node()` now types the second as such, but the first comes from the generic `create_node()`, which answers the `Node` base class, so the base class is kept for both rather than casting at each of the four returns |
 | `ColorAdjustment` | `dict[str, Any]` | The socket-name to default-value mapping `find_color_adjustment()` returns and `apply_color_adjustment()` accepts. The values are whatever `NodeService.get_node_info()` read off the sockets, which for a mix node means a mixture of floats and RGBA sequences, so `Any` is the honest value type |
 
 ## Public API
@@ -218,84 +214,6 @@ nothing.
 
 ---
 
-### Ink Layer Management
-
-#### add_focus_nodes(material, uv_map_name=None)
-
-Add a new ink layer to a material by creating the necessary node setup (alpha mixer, image texture, and UV map nodes). Supports both MakeSkin and layered skin materials. Handles first-layer and subsequent-layer creation differently, stacking layers through alpha mixer chains.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `material` | `bpy.types.Material` | — | The material to add ink layer nodes to |
-| `uv_map_name` | `str \| None` | `None` | Optional UV map name to set on the UV map node |
-
-**Returns:** `tuple[bpy.types.Node, bpy.types.Node, int]` — `(uvmap_node, texture_node, layer_number)` where `layer_number` is the new ink layer's index.
-
-**Raises:** `ValueError` if the material is not MakeSkin or layered skin type.
-
----
-
-#### get_number_of_ink_layers(material)
-
-Count the number of ink layers present in a material by scanning for image texture nodes named `inkLayerNtex`.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `material` | `bpy.types.Material \| None` | — | The material to inspect. A `None` material raises |
-
-**Returns:** `int` — The number of ink layers (0 if none).
-
-**Raises:** `ValueError` if the material is not MakeSkin or layered skin type.
-
----
-
-#### get_ink_layer_info(mesh_object, ink_layer=1)
-
-Return information about the UV map and texture used by a specific ink layer.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `mesh_object` | `bpy.types.Object` | — | The mesh object with the material |
-| `ink_layer` | `int` | `1` | The ink layer number to query |
-
-**Returns:** `tuple[str, str]` — `(uv_map_name, texture_name)`. The UV map name is empty if it's the default basemesh UV.
-
-**Raises:** `ValueError` if the material type is unsupported or the layer nodes don't exist.
-
----
-
-#### load_ink_layer(mesh_object, ink_layer_json_path)
-
-Load an ink layer from a JSON definition file. The JSON must contain `focus`, `image_name`, and optionally `name` fields. If a focus is specified, the corresponding UV map is loaded from a compressed JSON file and added to the mesh. The ink layer nodes are created and the texture image is assigned.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `mesh_object` | `bpy.types.Object` | — | The mesh object to add the ink layer to |
-| `ink_layer_json_path` | `str` | — | Path to the ink layer JSON definition file. Must be a real path: a `None` reaches `open()` and raises `TypeError`, which is how `HumanService` currently fails on a MHM naming an uninstalled makeup asset. |
-
-**Returns:** `tuple[bpy.types.Node, bpy.types.Node, int]` — `(uvmap_node, texture_node, ink_layer_id)`.
-
-**Raises:** `ValueError` if the image file doesn't exist or the focus file can't be found.
-
----
-
-#### remove_all_makeup(material, basemesh=None)
-
-Remove all ink layers from a material. Deletes all nodes with names starting with `inkLayer` and reconnects the original diffuse color chain. Optionally removes ink layer UV maps from the basemesh.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `material` | `bpy.types.Material \| None` | — | The material to clean up. A `None` material is logged and the method returns |
-| `basemesh` | `bpy.types.Object \| None` | `None` | Optional basemesh to remove ink layer UV maps from |
-
-**Returns:** None
-
-**Restriction:** on the MakeSkin path, the fallback branch that relinks a `diffuseTexture` node reuses
-`principled` without re-testing it, so a MakeSkin material with no Principled BSDF raises
-`AttributeError` inside `NodeService.add_link()` — after the ink layer nodes have already been deleted.
-
----
-
 ### Material I/O
 
 #### as_blend_path(path)
@@ -422,22 +340,3 @@ print(f"Material type: {mat_type}")  # e.g., "enhanced_skin"
 MaterialService.set_normalmap(material, "/path/to/normal_map.png")
 ```
 
-### Working with Ink Layers
-
-```python
-from mpfb.services.materialservice import MaterialService
-
-material = basemesh.data.materials[0]
-
-# Load an ink layer (tattoo, makeup, etc.)
-uvmap, texture, layer_id = MaterialService.load_ink_layer(
-    basemesh, "/path/to/tattoo.json"
-)
-print(f"Added ink layer {layer_id}")
-
-# Check how many ink layers exist
-num_layers = MaterialService.get_number_of_ink_layers(material)
-
-# Remove all ink layers
-MaterialService.remove_all_makeup(material, basemesh=basemesh)
-```

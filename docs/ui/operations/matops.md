@@ -6,11 +6,10 @@
 
 ## Overview
 
-The "Material" panel provides operators for modifying the materials on an MPFB character's mesh objects. It covers three distinct scenarios:
+The "Material" panel provides operators for modifying the materials on an MPFB character's mesh objects. It covers two distinct scenarios:
 
-1. **Removing makeup** — stripping all ink overlay layers that were added by the [MakeUp panel](../create_assets/makeup.md).
-2. **Setting a normal map** — adding or replacing a normal map texture in the existing material.
-3. **Creating a v2 skin material** — replacing all existing materials with a fresh instance of MPFB's node-based "v2 skin" material (`NodeWrapperSkin`), optionally preserving texture paths from the previous material.
+1. **Setting a normal map** — adding or replacing a normal map texture in the existing material.
+2. **Creating a v2 skin material** — replacing all existing materials with a fresh instance of MPFB's node-based "v2 skin" material (`NodeWrapperSkin`), optionally preserving texture paths from the previous material.
 
 The panel is shown for any recognised MakeHuman object that is not a skeleton (armature). This means it appears for the basemesh, body proxy meshes, and clothing items, but not for rigs.
 
@@ -27,28 +26,12 @@ The panel is shown for any recognised MakeHuman object that is not a skeleton (a
 | Base class | `Abstract_Panel` |
 | Properties prefix | `"MATO_"` |
 
-The panel draws three collapsible boxes:
+The panel draws two collapsible boxes:
 
-- **Makeup** — the **Remove makeup** button.
 - **Adjust material** — the **Set normalmap** button (opens a file browser).
 - **Experimental** — `recreate_groups` and `reuse_textures` toggles, plus the **Create v2 skin** button.
 
 ## Operators
-
-### MPFB_OT_Remove_Makeup_Operator
-
-| Attribute | Value |
-|---|---|
-| `bl_idname` | `mpfb.remove_makeup` |
-| `bl_label` | "Remove makeup" |
-| `bl_options` | `{'REGISTER', 'UNDO'}` |
-| Poll | `ANY_MAKEHUMAN_OBJECT_ACTIVE` |
-
-Removes all ink overlay layers (makeup) from the material on the basemesh associated with the active object. It calls `MaterialService.remove_all_makeup(material, basemesh)`.
-
-Makeup layers are node groups representing colour overlays (foundation, blush, lipstick, eye shadow, etc.) that were added by the MakeUp panel in the Create Assets section. This operator removes all of them in a single step, restoring the base skin material without any overlays.
-
----
 
 ### MPFB_OT_Set_Normalmap_Operator
 
@@ -101,7 +84,6 @@ Properties are stored with the `MATO_` prefix on the scene object.
 ## Related
 
 - [Operations index](index.md)
-- [MakeUp panel](../create_assets/makeup.md) — adds the ink/makeup layers that `mpfb.remove_makeup` removes
 - [Sculpt setup](sculpt.md) — can produce normal maps for use with `mpfb.set_normalmap`
 - [UI Layer overview](../index.md)
 - [Meta classes](../meta.md)

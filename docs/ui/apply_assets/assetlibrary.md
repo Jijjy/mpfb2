@@ -7,11 +7,11 @@
 
 ## Overview
 
-The asset library is the primary interface for browsing and applying pre-made assets to a character. It presents installed assets in a scrollable grid with optional thumbnail images, organised by asset type. Each asset type gets its own collapsible sub-panel: clothes, hair, eyes, eyebrows, eyelashes, teeth, tongue, topologies (body proxy meshes), skins, ink layers, and BVH pose files.
+The asset library is the primary interface for browsing and applying pre-made assets to a character. It presents installed assets in a scrollable grid with optional thumbnail images, organised by asset type. Each asset type gets its own collapsible sub-panel: clothes, hair, eyes, eyebrows, eyelashes, teeth, tongue, topologies (body proxy meshes), skins, and BVH pose files.
 
 Assets are discovered from the user's data directory (configured in MPFB preferences) and from an optional secondary root directory set in the Library Settings panel. Each asset type is scanned from a specific subdirectory — for example, clothes are scanned from `clothes/`, skins from `skins/`, and so on.
 
-The library panels are **dynamically generated** at addon registration time. Rather than defining eleven separate panel classes in Python, `assetlibrarypanel.py` loops over `ASSET_LIBRARY_SECTIONS` — a list of dictionaries exported from `AssetService` — and uses Python's built-in `type()` to create one `bpy.types.Panel` subclass per entry. Each generated class is then registered with `ClassManager`. This means that adding a new asset type to MPFB requires only adding an entry to `ASSET_LIBRARY_SECTIONS` in `assetservice.py`.
+The library panels are **dynamically generated** at addon registration time. Rather than defining ten separate panel classes in Python, `assetlibrarypanel.py` loops over `ASSET_LIBRARY_SECTIONS` — a list of dictionaries exported from `AssetService` — and uses Python's built-in `type()` to create one `bpy.types.Panel` subclass per entry. Each generated class is then registered with `ClassManager`. This means that adding a new asset type to MPFB requires only adding an entry to `ASSET_LIBRARY_SECTIONS` in `assetservice.py`.
 
 Equipped items (clothes and body parts already attached to the character) are tracked via the `asset_source` property stored on each Blender object using `GeneralObjectProperties`. When a panel draws, it compares each asset's path fragment against the list of equipped sources and highlights matching items in red (Blender's alert colour). An already-equipped asset shows an "Unequip" button instead of "Load". This applies both to MHCLO assets (clothes and body parts) and to topology proxies.
 
@@ -38,13 +38,12 @@ All other Apply Assets panels declare `bl_parent_id = "MPFB_PT_Assets_Panel"`, m
 
 ### Dynamic library panels (_Abstract_Asset_Library_Panel)
 
-The `_Abstract_Asset_Library_Panel` class in `assetlibrarypanel.py` defines the common behaviour for all library sub-panels. It is never registered with Blender directly; instead, eleven concrete subclasses are generated from it at module load time by iterating over `ASSET_LIBRARY_SECTIONS`.
+The `_Abstract_Asset_Library_Panel` class in `assetlibrarypanel.py` defines the common behaviour for all library sub-panels. It is never registered with Blender directly; instead, ten concrete subclasses are generated from it at module load time by iterating over `ASSET_LIBRARY_SECTIONS`.
 
 | Generated class name | `bl_label` | `asset_subdir` | `asset_type` | Load operator |
 |---|---|---|---|---|
 | `MPFB_PT_Asset_Library_Panel_proxymeshes` | "Topologies library" | `proxymeshes` | `proxy` | `mpfb.load_library_proxy` / `mpfb.unload_library_proxy` |
 | `MPFB_PT_Asset_Library_Panel_skins` | "Skins library" | `skins` | `mhmat` | `mpfb.load_library_skin` |
-| `MPFB_PT_Asset_Library_Panel_ink_layers` | "Ink layers" | `ink_layers` | `json` | `mpfb.load_library_ink` |
 | `MPFB_PT_Asset_Library_Panel_eyes` | "Eyes library" | `eyes` | `mhclo` | `mpfb.load_library_clothes` / `mpfb.unload_library_clothes` |
 | `MPFB_PT_Asset_Library_Panel_eyebrows` | "Eyebrows library" | `eyebrows` | `mhclo` | `mpfb.load_library_clothes` / `mpfb.unload_library_clothes` |
 | `MPFB_PT_Asset_Library_Panel_eyelashes` | "Eyelashes library" | `eyelashes` | `mhclo` | `mpfb.load_library_clothes` / `mpfb.unload_library_clothes` |
@@ -258,25 +257,6 @@ Loads a BVH pose file from the Poses library onto the active armature. **Warning
 
 ---
 
-### MPFB_OT_Load_Library_Ink_Operator
-
-| Attribute | Value |
-|---|---|
-| `bl_idname` | `mpfb.load_library_ink` |
-| `bl_label` | `"Load"` |
-| `bl_options` | `{'REGISTER', 'UNDO'}` |
-| Base class | `MpfbOperator` |
-
-Adds an ink layer (a JSON-defined texture overlay, such as tattoos or makeup) to the basemesh's current material. Ink layers are only visible on the basemesh itself — they are not applied to topology proxy meshes. If a proxy is present, a warning is shown. Steps:
-
-1. Finds the basemesh from the active object or its relatives.
-2. Gets the basemesh's material and identifies its type via `MaterialService.identify_material()`.
-3. Validates that the material type is `"makeskin"` or `"layered_skin"`. Any other type causes an error.
-4. Calls `MaterialService.load_ink_layer()` with the basemesh and the ink layer JSON file path.
-5. Checks whether a body proxy exists and issues a warning if so, because the ink layer will not be visible through the proxy.
-
----
-
 ### MPFB_OT_Load_Pack_Operator
 
 | Attribute | Value |
@@ -351,6 +331,6 @@ Defined inline in `alternativematerialpanel.py` as a `SceneConfigSet` with prefi
 - [AssetService](../../services/assetservice.md) — provides `ASSET_LIBRARY_SECTIONS`, `get_asset_list()`, `update_all_asset_lists()`, `alternative_materials_for_asset()`, and `alternative_material_tiles_for_asset()`
 - [HumanService](../../services/humanservice.md) — provides `add_mhclo_asset()`, `unload_mhclo_asset()`, and `set_character_skin()`
 - [ClothesService](../../services/clothesservice.md) — provides `fit_clothes_to_human()`, `set_up_rigging()`, and `update_delete_group()`
-- [MaterialService](../../services/materialservice.md) — provides `load_ink_layer()`, `identify_material()`, and related material utilities
+- [MaterialService](../../services/materialservice.md) — provides `identify_material()`, and related material utilities
 - [AnimationService](../../services/animationservice.md) — provides `import_bvh_file_as_pose()`
 - [MHCLO file format](../../fileformats/mhclo.md) — the `.mhclo` format used for clothes and body-part assets

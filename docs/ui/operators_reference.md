@@ -14,7 +14,6 @@ documented appear with plain text class names.
 |---|---|---|---|---|
 | `apply_assets/assetlibrary/operators/installtarget.py` | `mpfb.install_target` | "Install custom target" | [MPFB_OT_Install_Target_Operator](apply_assets/assetlibrary.md) | `MpfbOperator`, `ImportHelper` |
 | `apply_assets/assetlibrary/operators/loadlibraryclothes.py` | `mpfb.load_library_clothes` | "Load" | [MPFB_OT_Load_Library_Clothes_Operator](apply_assets/assetlibrary.md) | `MpfbOperator` |
-| `apply_assets/assetlibrary/operators/loadlibraryink.py` | `mpfb.load_library_ink` | "Load" | [MPFB_OT_Load_Library_Ink_Operator](apply_assets/assetlibrary.md) | `MpfbOperator` |
 | `apply_assets/assetlibrary/operators/loadlibrarymaterial.py` | `mpfb.load_library_material` | "Load" | [MPFB_OT_Load_Library_Material_Operator](apply_assets/assetlibrary.md) | `MpfbOperator` |
 | `apply_assets/assetlibrary/operators/loadlibrarypose.py` | `mpfb.load_library_pose` | "Load Pose" | [MPFB_OT_Load_Library_Pose_Operator](apply_assets/assetlibrary.md) | `MpfbOperator` |
 | `apply_assets/assetlibrary/operators/loadlibraryproxy.py` | `mpfb.load_library_proxy` | "Load" | [MPFB_OT_Load_Library_Proxy_Operator](apply_assets/assetlibrary.md) | `MpfbOperator` |
@@ -56,11 +55,6 @@ documented appear with plain text class names.
 | `create_assets/maketarget/operators/writelibtarget.py` | `mpfb.write_library_target` | "Save target" | [MPFB_OT_WriteLibTargetOperator](create_assets/maketarget.md) | `MpfbOperator` |
 | `create_assets/maketarget/operators/writeptarget.py` | `mpfb.write_maketarget_ptarget` | "Save proxy-specific target" | [MPFB_OT_WritePtargetOperator](create_assets/maketarget.md) | `MpfbOperator`, `ExportHelper` |
 | `create_assets/maketarget/operators/writetarget.py` | `mpfb.write_maketarget_target` | "Save target" | [MPFB_OT_WriteTargetOperator](create_assets/maketarget.md) | `MpfbOperator`, `ExportHelper` |
-| `create_assets/makeup/operators/createink.py` | `mpfb.create_ink` | "Create ink" | [MPFB_OT_CreateInkOperator](create_assets/makeup.md) | `MpfbOperator` |
-| `create_assets/makeup/operators/createuvmap.py` | `mpfb.create_uv_map` | "Create UV map" | [MPFB_OT_CreateUvMapOperator](create_assets/makeup.md) | `MpfbOperator` |
-| `create_assets/makeup/operators/importuvmap.py` | `mpfb.import_uv_map` | "Import UV map" | [MPFB_OT_ImportUvMapOperator](create_assets/makeup.md) | `MpfbOperator`, `ImportHelper` |
-| `create_assets/makeup/operators/writeink.py` | `mpfb.write_ink_layer` | "Write ink layer" | [MPFB_OT_WriteInkOperator](create_assets/makeup.md) | `MpfbOperator` |
-| `create_assets/makeup/operators/writeuvmap.py` | `mpfb.write_uv_map` | "Write UV map" | [MPFB_OT_WriteUvMapOperator](create_assets/makeup.md) | `MpfbOperator`, `ExportHelper` |
 | `create_assets/makeweight/operators/importweights.py` | `mpfb.import_makeweight_weight` | "Import weights" | [MPFB_OT_ImportWeightsOperator](create_assets/makeweight.md) | `MpfbOperator`, `ImportHelper` |
 | `create_assets/makeweight/operators/saveweights.py` | `mpfb.save_makeweight_weight` | "Save weights" | [MPFB_OT_SaveWeightsOperator](create_assets/makeweight.md) | `MpfbOperator`, `ExportHelper` |
 | `create_assets/makeweight/operators/symmetrizeleft.py` | `mpfb.symmetrize_makeweight_left` | "Copy right to left" | [MPFB_OT_SymmetrizeLeftOperator](create_assets/makeweight.md) | `MpfbOperator` |
@@ -119,7 +113,6 @@ documented appear with plain text class names.
 | `operations/faceops/operators/configurelipsync.py` | `mpfb.configure_lip_sync` | "Assign Lip Sync shape keys" | [MPFB_OT_Configure_Lip_Sync_Operator](operations/faceops.md) | `MpfbOperator` |
 | `operations/faceops/operators/loadfaceshapekeys.py` | `mpfb.load_face_shape_keys` | "Load face shape keys" | [MPFB_OT_Load_Face_Shape_Keys_Operator](operations/faceops.md) | `MpfbOperator` |
 | `operations/matops/operators/createv2skin.py` | `mpfb.create_v2_skin` | "Create v2 skin" | [MPFB_OT_Create_V2_Skin_Operator](operations/matops.md) | `MpfbOperator` |
-| `operations/matops/operators/removemakeup.py` | `mpfb.remove_makeup` | "Remove makeup" | [MPFB_OT_Remove_Makeup_Operator](operations/matops.md) | `MpfbOperator` |
 | `operations/matops/operators/setnormalmap.py` | `mpfb.set_normalmap` | "Set normalmap" | [MPFB_OT_Set_Normalmap_Operator](operations/matops.md) | `MpfbOperator`, `ImportHelper` |
 | `operations/poseops/operators/apply_pose.py` | `mpfb.apply_pose` | "Apply as rest pose" | [MPFB_OT_Apply_Pose_Operator](operations/poseops.md) | `MpfbOperator` |
 | `operations/poseops/operators/copy_pose.py` | `mpfb.copy_pose` | "Copy pose" | [MPFB_OT_Copy_Pose_Operator](operations/poseops.md) | `MpfbOperator` |
@@ -132,9 +125,6 @@ documented appear with plain text class names.
 | `presets/eyesettings/operators/savenewsettings.py` | `mpfb.save_new_eye_settings` | "Save new settings" | [MPFB_OT_SaveNewEyeSettingsOperator](presets/eyesettings.md) | `MpfbOperator` |
 | `presets/humanpresets/operators/overwritepresets.py` | `mpfb.overwrite_human_presets` | "Overwrite presets" | [MPFB_OT_Overwrite_Human_Presets_Operator](presets/humanpresets.md) | `MpfbOperator` |
 | `presets/humanpresets/operators/savenewpresets.py` | `mpfb.save_new_human_presets` | "Save new presets" | [MPFB_OT_Save_New_Presets_Operator](presets/humanpresets.md) | `MpfbOperator` |
-| `presets/makeuppresets/operators/loadpresets.py` | `mpfb.load_makeup_presets` | "Load presets" | [MPFB_OT_Load_Makeup_Presets_Operator](presets/makeuppresets.md) | `generic_makeup_presets` |
-| `presets/makeuppresets/operators/overwritepresets.py` | `mpfb.overwrite_makeup_presets` | "Overwrite presets" | [MPFB_OT_Overwrite_Makeup_Presets_Operator](presets/makeuppresets.md) | `generic_makeup_presets` |
-| `presets/makeuppresets/operators/savenewpresets.py` | `mpfb.save_new_makeup_presets` | "Save new presets" | [MPFB_OT_Save_New_Makeup_Presets_Operator](presets/makeuppresets.md) | `generic_makeup_presets` |
 | `randomize/operators/createrandomhuman.py` | `mpfb.create_random_human` | "Create random human" | [MPFB_OT_Create_Random_Human_Operator](randomize/randomize.md) | `MpfbOperator` |
 | `randomize/operators/loadpreset.py` | `mpfb.randomize_load_preset` | "Load selected preset" | [MPFB_OT_Randomize_Load_Preset_Operator](randomize/randomize.md) | `MpfbOperator` |
 | `randomize/operators/overwritepreset.py` | `mpfb.randomize_overwrite_preset` | "Overwrite selected preset" | [MPFB_OT_Randomize_Overwrite_Preset_Operator](randomize/randomize.md) | `MpfbOperator` |

@@ -8,7 +8,7 @@ The system asset check is drawn only when something is wrong, ie when the makehu
 
 | Sub-section directory | Panel label(s) | Description |
 |---|---|---|
-| `assetlibrary/` | "Topologies library", "Skins library", "Ink layers", "Eyes library", "Eyebrows library", "Eyelashes library", "Hair library", "Teeth library", "Tongue library", "Clothes library", "Poses library", "Library Settings", "Alternative materials" | Browse and apply assets from the installed asset library using a scrollable visual grid |
+| `assetlibrary/` | "Topologies library", "Skins library", "Eyes library", "Eyebrows library", "Eyelashes library", "Hair library", "Teeth library", "Tongue library", "Clothes library", "Poses library", "Library Settings", "Alternative materials" | Browse and apply assets from the installed asset library using a scrollable visual grid |
 | `loadclothes/` | "Load MHCLO" | Load a clothes or body-part asset directly from any `.mhclo` file on disk, without requiring it to be installed in the asset library |
 
 ## Further reading

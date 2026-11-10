@@ -37,7 +37,7 @@ In addition to `ASSET_LIBRARY_SECTIONS` and the asset list cache, the module mai
 
 ### ASSET_LIBRARY_SECTIONS
 
-A module-level list of 11 dictionaries, each defining an asset library section. Each dictionary contains:
+A module-level list of 10 dictionaries, each defining an asset library section. Each dictionary contains:
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -47,9 +47,8 @@ A module-level list of 11 dictionaries, each defining an asset library section. 
 | `object_type` | `str` | MPFB object type for loaded assets |
 | `eye_overrides` | `bool` | Whether the section supports eye material overrides |
 | `skin_overrides` | `bool` | Whether the section supports skin material overrides |
-| `ink_overrides` | `bool` | Whether the section supports ink layer overrides. Present on the Ink layers section only, so callers must use `section.get("ink_overrides", False)` rather than subscripting |
 
-The sections cover: Topologies, Skins, Ink layers, Eyes, Eyebrows, Eyelashes, Hair, Teeth, Tongue, Clothes, and Poses.
+The sections cover: Topologies, Skins, Eyes, Eyebrows, Eyelashes, Hair, Teeth, Tongue, Clothes, and Poses.
 
 ## Public API
 
@@ -116,18 +115,6 @@ Find all `.bvh` asset files in the specified subdirectory.
 | `asset_subdir` | `str` | `"poses"` | The asset subdirectory to search |
 
 **Returns:** `list[Path]` — List of matching `.bvh` files.
-
----
-
-#### list_ink_layer_assets(asset_subdir="ink_layers")
-
-Find all ink layer JSON files in the specified subdirectory.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `asset_subdir` | `str` | `"ink_layers"` | The asset subdirectory to search |
-
-**Returns:** `list[Path]` — List of matching `.json` files.
 
 ---
 

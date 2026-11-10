@@ -4,7 +4,7 @@
 
 HumanService is the highest-level orchestrator in MPFB's service layer. It coordinates the full lifecycle of a human character: creating the basemesh, applying macro and micro targets, adding rigs, equipping body-part and clothing assets, setting skin and eye materials, and serializing/deserializing the entire character definition to and from JSON or MHM files.
 
-The **serialization** path collects information from a fully assembled character (targets, rig type, equipped assets, material settings, ink layers, alternative materials, and color adjustments) into a `human_info` dictionary that is written as JSON. The **deserialization** path reads that dictionary back and recreates the character from scratch, respecting override settings for rig, skin model, clothes material model, subdivision levels, and more. MHM files (MakeHuman's native save format) are also supported as an import source, with target and asset lines parsed and mapped to MPFB equivalents.
+The **serialization** path collects information from a fully assembled character (targets, rig type, equipped assets, material settings, alternative materials, and color adjustments) into a `human_info` dictionary that is written as JSON. The **deserialization** path reads that dictionary back and recreates the character from scratch, respecting override settings for rig, skin model, clothes material model, subdivision levels, and more. MHM files (MakeHuman's native save format) are also supported as an import source, with target and asset lines parsed and mapped to MPFB equivalents.
 
 The service also manages a **preset system**: character definitions stored as `human.*.json` files in the user config directory can be listed, cached, and loaded. A **refit** operation allows the character to be updated after target changes by re-fitting all equipped clothes and re-positioning the rig.
 
@@ -41,7 +41,7 @@ deferred-import rule in `__init__.py`.
 | `ClothesService` | Fitting clothes, delete groups, weight interpolation, rigging |
 | `RigService` | Rig identification, weight loading, armature management, refitting |
 | `NodeService` | Shader node queries and value manipulation |
-| `MaterialService` | Material creation, deletion, identification, ink layers, color adjustment |
+| `MaterialService` | Material creation, deletion, identification, color adjustment |
 | `LocationService` | Resolving paths to config, data, and settings directories |
 | `SystemService` | Checking for Rigify addon availability |
 | `HumanObjectProperties` | Reading/writing human-specific custom properties (phenotype values, material source) |
@@ -185,7 +185,7 @@ Retrieve the `asset_source` property values of all mesh assets currently equippe
 
 #### serialize_to_json_string(basemesh, save_clothes=False)
 
-Serialize a fully assembled character to a JSON string. Collects phenotype (macro) details, rig type, body parts (eyes, hair, teeth, etc.), clothes, proxy, skin settings, eye material settings, ink layers, alternative materials, and color adjustments. Custom rigs are serialized using the `"custom.<name>"` identifier returned by `RigService.identify_rig()`.
+Serialize a fully assembled character to a JSON string. Collects phenotype (macro) details, rig type, body parts (eyes, hair, teeth, etc.), clothes, proxy, skin settings, eye material settings, alternative materials, and color adjustments. Custom rigs are serialized using the `"custom.<name>"` identifier returned by `RigService.identify_rig()`.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -218,7 +218,7 @@ Serialize a character to a JSON file. Calls `serialize_to_json_string` and write
 
 #### deserialize_from_dict(human_info, deserialization_settings)
 
-Reconstruct a full character from a `human_info` dictionary and deserialization settings. Creates the basemesh, loads targets, adds the rig, equips body parts and clothes, sets up the proxy, applies skin and eye materials, loads ink layers, and enables shape key edit mode. If the `"rig"` key starts with `"custom."`, the rig is loaded via `add_custom_rig()` instead of `add_builtin_rig()`. If the named custom rig is not available in user data, deserialization fails with a descriptive error message.
+Reconstruct a full character from a `human_info` dictionary and deserialization settings. Creates the basemesh, loads targets, adds the rig, equips body parts and clothes, sets up the proxy, applies skin and eye materials, and enables shape key edit mode. If the `"rig"` key starts with `"custom."`, the rig is loaded via `add_custom_rig()` instead of `add_builtin_rig()`. If the named custom rig is not available in user data, deserialization fails with a descriptive error message.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|

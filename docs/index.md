@@ -36,7 +36,7 @@ These describe JSON formats used internally by MPFB and for user presets:
 - [Target metadata](fileformats/target_metadata.md) — target categories and macro morph definitions
 - [Mesh metadata](fileformats/mesh_metadata.md) — vertex groups, mesh config, UV layers
 - [Human preset](fileformats/human_preset.md) — complete character definition
-- [Miscellaneous presets](fileformats/misc_presets.md) — importer presets, makeup, ink layers
+- [Miscellaneous presets](fileformats/misc_presets.md) — importer presets
 
 ## Services
 

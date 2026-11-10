@@ -47,7 +47,7 @@ The table is sorted by the order the panels appear in, top to bottom.
 | 40 | `apply_assets/` | Apply assets | `MATERIALSCATEGORY` | Applying pre-made clothes and other assets to a character |
 | 50 | `presets/` | Manage save files | `MATERIALSCATEGORY` | Saving and loading character presets and settings |
 | 60 | `operations/` | Operations | `OPERATIONSCATEGORY` | Character manipulation: mesh operations, material operations, export, AI tools, and more |
-| 70 | `create_assets/` | Create assets | `MODELCATEGORY` | Tools for authoring clothes, skin materials, morph targets, rigs, poses, and makeup |
+| 70 | `create_assets/` | Create assets | `MODELCATEGORY` | Tools for authoring clothes, skin materials, morph targets, rigs, and poses |
 | 80 | `haireditorpanel/` | Hair Editor | `HAIREDITORCATEGORY` | Experimental hair and fur editing interface |
 | 90 | `developer/` | Developer | `DEVELOPERCATEGORY` | Developer and debugging tools |
 | 100 | `system/` | System and resources | `DEVELOPERCATEGORY` | System configuration, directory management, and web resources |
@@ -125,8 +125,8 @@ Documentation for individual UI sections:
 - [New Human](new_human/index.md) — creating characters from scratch, from presets, from MHM files, or by importing from MakeHuman
 - [Rigging](rigging/index.md) — adding rigs, Rigify conversion, IK helpers, poses, and walk cycles
 - [Apply Assets](apply_assets/index.md) — browsing the installed asset library and loading clothes, skins, poses, topologies, and other assets onto a character
-- [Create Assets](create_assets/index.md) — authoring clothes, skin materials, morph targets, rigs, poses, makeup layers, and vertex weights
-- [Presets](presets/index.md) — saving and loading human character presets, skin material settings, eye material settings, and makeup configurations
+- [Create Assets](create_assets/index.md) — authoring clothes, skin materials, morph targets, rigs, poses, and vertex weights
+- [Presets](presets/index.md) — saving and loading human character presets, skin material settings, and eye material settings
 - [Operations](operations/index.md) — mesh operations, material operations, pose tools, animation tools, facial shape keys, sculpt setup, and export copy
 - [System](system/index.md) — system diagnostics, web resource links, and directory quick-access
 - [Developer](developer/developer.md) — logging controls, node tree I/O, target file I/O, and code-generation tools for addon developers
