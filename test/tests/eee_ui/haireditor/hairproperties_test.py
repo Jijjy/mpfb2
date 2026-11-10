@@ -216,9 +216,9 @@ def test_config_properties_keep_what_the_user_picked(stand_in, asset_name):
 def test_mode_which_no_longer_exists_is_reset(stand_in, asset_name):
     """A file saved by an older version can name a mode which was since removed."""
     stand_in[f"DHAI_{asset_name}_cards_mode"] = "MODE_FROM_AN_OLD_VERSION"
-    assert hp.get_cards_mode(HAIR_PROPERTIES, stand_in, asset_name) == cg.CARDS_MODE_TILES
+    assert hp.get_cards_mode(HAIR_PROPERTIES, stand_in, asset_name) == cg.CARDS_MODE_CLUMP
     hp.create_cards_config_properties(HAIR_PROPERTIES, stand_in, asset_name)
-    assert HAIR_PROPERTIES.get_value(f"{asset_name}_cards_mode", None, entity_reference=stand_in) == cg.CARDS_MODE_TILES
+    assert HAIR_PROPERTIES.get_value(f"{asset_name}_cards_mode", None, entity_reference=stand_in) == cg.CARDS_MODE_CLUMP
 
 
 def test_unknown_bake_target_falls_back_to_cards(stand_in, asset_name):
@@ -227,7 +227,7 @@ def test_unknown_bake_target_falls_back_to_cards(stand_in, asset_name):
 
 
 def test_defaults_without_any_settings(stand_in, asset_name):
-    assert hp.get_cards_mode(HAIR_PROPERTIES, stand_in, asset_name) == cg.CARDS_MODE_TILES
+    assert hp.get_cards_mode(HAIR_PROPERTIES, stand_in, asset_name) == cg.CARDS_MODE_CLUMP
     assert hp.get_cards_selection_method(HAIR_PROPERTIES, stand_in, asset_name) == cg.SELECTION_METHOD_RANDOM
     assert hp.get_bake_target(HAIR_PROPERTIES, stand_in, asset_name) == cg.BAKE_TARGET_CARDS
     assert hp.get_light_mode(HAIR_PROPERTIES, stand_in, asset_name) == cg.LIGHT_MODE_FIXED

@@ -7,7 +7,7 @@
 # Description:  builders for the geometry node groups behind each hair cards generation mode
 #               and meshes build in python for cluster-based modes
 # ------------------------------------------------------------------------------
-"""One geometry-nodes builder per ``cards_mode`` value (except CLUSTER_BOX, which builds a static mesh in python).
+"""One geometry-nodes builder per ``cards_mode`` value (except CLUSTER_BOX and CLUMP, which build a static mesh in python).
 
 Mode and strand-selection method change the node graph itself, so they only apply on regenerate.
 Every other parameter is a live modifier input socket.
@@ -37,12 +37,15 @@ CARDS_MODE_CLUSTER_BOX = "CLUSTER_BOX"
 
 CARDS_MODE_CLUSTER_RIBBON = "CLUSTER_RIBBON"
 
+CARDS_MODE_CLUMP = "CLUMP"
+
 CARDS_MODE_ITEMS = [
     (CARDS_MODE_TILES, "Random tiles", "A quad is instanced on resampled points along each kept strand"),
     (CARDS_MODE_RIBBON, "Ribbon", "Each kept strand becomes a single continuous, taperable ribbon mesh"),
     (CARDS_MODE_SHELL, "Shell (volume)", "A single closed shell wrapped around the whole hairstyle, good for LODs"),
     (CARDS_MODE_CLUSTER_BOX, "Cluster boxes", "One flat oriented card per bundle of nearby strands, computed in python (PCA)"),
     (CARDS_MODE_CLUSTER_RIBBON, "Cluster ribbons", "One curved ribbon per bundle of nearby strands, following the bundle's average curve"),
+    (CARDS_MODE_CLUMP, "Clumps", "One closed tapered tube per bundle of nearby strands, merged until the style fits the triangle budget"),
     ]
 
 # Where the hair gets baked to.
@@ -114,7 +117,20 @@ SELECTION_METHOD_ITEMS = [
 
 STRAND_BASED_MODES = (CARDS_MODE_TILES, CARDS_MODE_RIBBON)
 
-CLUSTER_MODES = (CARDS_MODE_CLUSTER_BOX, CARDS_MODE_CLUSTER_RIBBON)
+CLUSTER_MODES = (CARDS_MODE_CLUSTER_BOX, CARDS_MODE_CLUSTER_RIBBON, CARDS_MODE_CLUMP)
+
+# Cluster modes which build a finished mesh in python, with no generator node group
+PYTHON_MESH_MODES = (CARDS_MODE_CLUSTER_BOX, CARDS_MODE_CLUMP)
+
+# Clump tubes: ring sides at the root and at the last ring, tip ring radius as a fraction of the root one,
+# and the smallest root radius (a single-strand clump has no spread)
+CLUMP_ROOT_SIDES = 6
+
+CLUMP_TIP_SIDES = 3
+
+_CLUMP_TIP_RADIUS = 0.25
+
+_CLUMP_MIN_RADIUS = 0.002
 
 # The UV map that the tiles / ribbon / cluster modes lay out and which the bake packs into the atlas
 CARDS_UV_MAP = "UVMap"
@@ -1250,6 +1266,33 @@ class HairCardService():
         return members
 
     @staticmethod
+    def _bundle_mean_curve(clustered: dict[str, Any], members: "np.ndarray", target: "np.ndarray") -> "np.ndarray | None":
+        """The members' strands resampled by arc length onto the ``target`` parameters (0..1) and averaged. None if no strand has length."""
+        import numpy as np
+
+        positions = clustered["positions"]
+        first_index = clustered["first_index"]
+        point_count = clustered["point_count"]
+        accumulator = np.zeros((len(target), 3), dtype=np.float64)
+        used = 0
+        for member in members:
+            start = first_index[member]
+            count = point_count[member]
+            if count < 2:
+                continue
+            strand = positions[start:start + count]
+            # Resample by arc length, so points bunched up at the root do not drag the average towards the scalp
+            steps = np.linalg.norm(np.diff(strand, axis=0), axis=1)
+            travelled = np.concatenate(([0.0], np.cumsum(steps)))
+            if travelled[-1] <= 0.0:
+                continue
+            parameter = travelled / travelled[-1]
+            for axis in range(3):
+                accumulator[:, axis] += np.interp(target, parameter, strand[:, axis])
+            used += 1
+        return accumulator / used if used else None
+
+    @staticmethod
     def build_cluster_ribbon_mesh(hair_obj: bpy.types.Object, cluster_count: int, min_strands: int, seed: int, samples: int, depsgraph: bpy.types.Depsgraph | None = None) -> bpy.types.Mesh | None:
         """Build one averaged poly-line per cluster of nearby strands as a base for ribbon card.
 
@@ -1264,9 +1307,6 @@ class HairCardService():
         if clustered is None:
             return None
 
-        positions = clustered["positions"]
-        first_index = clustered["first_index"]
-        point_count = clustered["point_count"]
         roots = clustered["roots"]
 
         samples = max(2, int(samples))
@@ -1279,27 +1319,10 @@ class HairCardService():
             if members is None:
                 continue
 
-            accumulator = np.zeros((samples, 3), dtype=np.float64)
-            used = 0
-            for member in members:
-                start = first_index[member]
-                count = point_count[member]
-                if count < 2:
-                    continue
-                strand = positions[start:start + count]
-                # Resample by arc length, so points bunched up at the root do not drag the average towards the scalp
-                steps = np.linalg.norm(np.diff(strand, axis=0), axis=1)
-                travelled = np.concatenate(([0.0], np.cumsum(steps)))
-                if travelled[-1] <= 0.0:
-                    continue
-                parameter = travelled / travelled[-1]
-                for axis in range(3):
-                    accumulator[:, axis] += np.interp(target, parameter, strand[:, axis])
-                used += 1
-
-            if used == 0:
+            mean_curve = HairCardService._bundle_mean_curve(clustered, members, target)
+            if mean_curve is None:
                 continue
-            averaged.append(accumulator / used)
+            averaged.append(mean_curve)
 
             member_roots = roots[members]
             spread = member_roots - member_roots.mean(axis=0)
@@ -1410,6 +1433,178 @@ class HairCardService():
         uv_layer = mesh.uv_layers.new(name="UVMap")
         for loop in mesh.loops:
             uv_layer.data[loop.index].uv = uvs[loop.vertex_index]
+
+        return mesh
+
+    @staticmethod
+    def clump_ring_sides(ring_count: int) -> list[int]:
+        """Side count of each ring of a clump tube, from CLUMP_ROOT_SIDES at the root down to CLUMP_TIP_SIDES at the last ring."""
+        ring_count = max(2, int(ring_count))
+        span = CLUMP_ROOT_SIDES - CLUMP_TIP_SIDES
+        return [int(math.floor(CLUMP_ROOT_SIDES - span * ring / (ring_count - 1) + 0.5)) for ring in range(ring_count)]
+
+    @staticmethod
+    def clump_triangle_count(ring_count: int) -> int:
+        """Triangles in one clump tube: the root cap fan, the strips between rings and the tip fan to the apex."""
+        sides = HairCardService.clump_ring_sides(ring_count)
+        return (sides[0] - 2) + sum(lower + upper for lower, upper in zip(sides, sides[1:])) + sides[-1]
+
+    @staticmethod
+    def _merge_nearest_clusters(clustered: dict[str, Any], max_clusters: int) -> None:
+        """Merge the two clusters with the nearest root centroids until at most ``max_clusters`` remain.
+
+        Rewrites ``clustered["assignments"]``. Merged-away labels are left without members.
+        """
+        import numpy as np
+
+        assignments = clustered["assignments"].copy()
+        roots = clustered["roots"]
+        labels = [int(label) for label in np.unique(assignments)]
+        if len(labels) <= max_clusters:
+            return
+        centroids = np.array([roots[assignments == label].mean(axis=0) for label in labels])
+        sizes = np.array([np.count_nonzero(assignments == label) for label in labels], dtype=np.float64)
+
+        while len(labels) > max_clusters:
+            distances = ((centroids[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+            np.fill_diagonal(distances, np.inf)
+            keep, gone = sorted(np.unravel_index(np.argmin(distances), distances.shape))
+            total = sizes[keep] + sizes[gone]
+            centroids[keep] = (centroids[keep] * sizes[keep] + centroids[gone] * sizes[gone]) / total
+            sizes[keep] = total
+            assignments[assignments == labels[gone]] = labels[keep]
+            del labels[gone]
+            centroids = np.delete(centroids, gone, axis=0)
+            sizes = np.delete(sizes, gone)
+
+        clustered["assignments"] = assignments
+
+    @staticmethod
+    def build_clump_mesh(hair_obj: bpy.types.Object, cluster_count: int, min_strands: int, seed: int, samples: int, max_tris: int,
+                         depsgraph: bpy.types.Depsgraph | None = None) -> bpy.types.Mesh | None:
+        """Build one closed, tapered tube per clump of nearby strands.
+
+        Strands are grouped like the other cluster modes. Each clump follows its members' averaged curve
+        (``samples`` points: one ring per point, the last point is the closed tip). Rings go from 6 sides at the root
+        to 3 at the last ring. The cross-section is flattened 2:1 along the clump's PCA minor axis, and the frame is
+        carried along the curve by parallel transport, so a curve that winds through space twists the tube with it.
+        Clumps with the nearest roots are merged until the whole style is at most ``max_tris`` triangles.
+
+        Returns bpy.types.Mesh, or None if no clump qualified or one clump alone does not fit in ``max_tris``.
+        """
+        import numpy as np
+
+        ring_count = max(2, int(samples) - 1)
+        while ring_count > 2 and HairCardService.clump_triangle_count(ring_count) > max_tris:
+            ring_count -= 1
+        tris_per_clump = HairCardService.clump_triangle_count(ring_count)
+        if tris_per_clump > max_tris:
+            return None
+
+        clustered = HairCardService._read_clustered_strands(hair_obj, cluster_count, min_strands, seed, depsgraph)
+        if clustered is None:
+            return None
+        HairCardService._merge_nearest_clusters(clustered, max(1, int(max_tris) // tris_per_clump))
+
+        positions = clustered["positions"]
+        first_index = clustered["first_index"]
+        point_count = clustered["point_count"]
+        roots = clustered["roots"]
+        sides = HairCardService.clump_ring_sides(ring_count)
+        target = np.linspace(0.0, 1.0, ring_count + 1)
+
+        verts = []
+        faces = []
+        loop_uvs = []
+
+        def add_face(corners):
+            # corners are (vertex index, u, v)
+            faces.append(tuple(corner[0] for corner in corners))
+            loop_uvs.extend((corner[1], corner[2]) for corner in corners)
+
+        for cluster_index in range(clustered["cluster_count"]):
+            members = HairCardService._bundle_members(clustered, cluster_index, min_strands)
+            if members is None:
+                continue
+            curve = HairCardService._bundle_mean_curve(clustered, members, target)
+            if curve is None:
+                continue
+
+            member_points = np.concatenate([positions[first_index[i]:first_index[i] + point_count[i]] for i in members], axis=0)
+            centered = member_points - member_points.mean(axis=0)
+            _eigvals, eigvecs = np.linalg.eigh(centered.T @ centered)
+            minor_axis = eigvecs[:, 0]
+
+            member_roots = roots[members]
+            spread = member_roots - member_roots.mean(axis=0)
+            root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())), _CLUMP_MIN_RADIUS)
+
+            tangents = np.gradient(curve, axis=0)
+            lengths = np.linalg.norm(tangents, axis=1)
+            if lengths.min() <= 1e-9:
+                continue
+            tangents = tangents / lengths[:, None]
+
+            flat_axis = minor_axis - np.dot(minor_axis, tangents[0]) * tangents[0]
+            if np.linalg.norm(flat_axis) < 1e-6:
+                # Minor axis along the strands: any direction across the root tangent will do
+                helper = np.array((1.0, 0.0, 0.0)) if abs(tangents[0][0]) < 0.9 else np.array((0.0, 1.0, 0.0))
+                flat_axis = np.cross(tangents[0], helper)
+            flat_axis /= np.linalg.norm(flat_axis)
+
+            ring_starts = []
+            for ring in range(ring_count):
+                tangent = tangents[ring]
+                if ring > 0:
+                    # Parallel transport of the previous frame: the twist comes from the curve's own torsion
+                    flat_axis = flat_axis - np.dot(flat_axis, tangent) * tangent
+                    flat_axis /= np.linalg.norm(flat_axis)
+                # n x T, so the angle runs counter-clockwise about the tangent and the faces below point outwards
+                wide_axis = np.cross(flat_axis, tangent)
+                radius = root_radius * (1.0 - (1.0 - _CLUMP_TIP_RADIUS) * ring / (ring_count - 1))
+                ring_starts.append(len(verts))
+                for side in range(sides[ring]):
+                    angle = 2.0 * math.pi * side / sides[ring]
+                    point = curve[ring] + radius * math.cos(angle) * wide_axis + 0.5 * radius * math.sin(angle) * flat_axis
+                    verts.append(tuple(point))
+            apex = len(verts)
+            verts.append(tuple(curve[-1]))
+
+            def corner(ring, side):
+                # side == sides[ring] is the seam: vertex 0 again, but with u = 1
+                return (ring_starts[ring] + side % sides[ring], side / sides[ring], target[ring])
+
+            # Root cap, facing back along the strands
+            for side in range(1, sides[0] - 1):
+                add_face((corner(0, 0), corner(0, side + 1), corner(0, side)))
+
+            # Strips between rings with different side counts: walk both rings by their angle
+            for ring in range(ring_count - 1):
+                lower_count, upper_count = sides[ring], sides[ring + 1]
+                lower = upper = 0
+                while lower < lower_count or upper < upper_count:
+                    if upper == upper_count or (lower < lower_count and (lower + 1) / lower_count <= (upper + 1) / upper_count):
+                        add_face((corner(ring, lower), corner(ring, lower + 1), corner(ring + 1, upper)))
+                        lower += 1
+                    else:
+                        add_face((corner(ring, lower), corner(ring + 1, upper + 1), corner(ring + 1, upper)))
+                        upper += 1
+
+            last = ring_count - 1
+            for side in range(sides[last]):
+                add_face((corner(last, side), corner(last, side + 1), (apex, (side + 0.5) / sides[last], 1.0)))
+
+        if not faces:
+            return None
+
+        mesh = bpy.data.meshes.new(f"{hair_obj.name}_clumps")
+        mesh.from_pydata(verts, [], faces)
+        mesh.update()
+
+        uv_layer = mesh.uv_layers.new(name=CARDS_UV_MAP)
+        uv_layer.data.foreach_set('uv', np.array(loop_uvs, dtype=np.float32).ravel())
+        mesh.polygons.foreach_set('use_smooth', np.ones(len(mesh.polygons), dtype=bool))
+        mesh.update()
 
         return mesh
 

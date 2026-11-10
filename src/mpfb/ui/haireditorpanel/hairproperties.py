@@ -6,7 +6,7 @@ from ...services.dynamicconfigset import DynamicConfigSet
 from ...services.haireditorservices import HairEditorService
 from ...services.modifierservice import ModifierService
 from ...services.hairbakeservice import HairBakeService
-from ...services.haircardservice import (CARDS_MODE_ITEMS, CARDS_MODE_TILES, CARDS_MODE_CLUSTER_RIBBON,
+from ...services.haircardservice import (CARDS_MODE_ITEMS, CARDS_MODE_CLUSTER_RIBBON, CARDS_MODE_CLUMP,
                                          CLUSTER_RIBBON_PROFILE_STEPS, SELECTION_METHOD_ITEMS,
                                          SELECTION_METHOD_RANDOM, BAKE_TARGET_ITEMS, BAKE_TARGET_CARDS,
                                          LIGHT_MODE_ITEMS, LIGHT_MODE_FIXED, LIGHT_MODE_BBOX)
@@ -178,7 +178,7 @@ DYNAMIC_CARDS_BAKE_PROPS_DEFINITIONS = {
 DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS = {
         "cards_bake_target": ("enum", _enum_items_with_index(BAKE_TARGET_ITEMS), BAKE_TARGET_CARDS,
                               "What the hair is baked onto: generated cards, the body's own texture, or a shell duplicated from the body"),
-        "cards_mode": ("enum", _enum_items_with_index(CARDS_MODE_ITEMS), CARDS_MODE_TILES, "How the hair cards are generated"),
+        "cards_mode": ("enum", _enum_items_with_index(CARDS_MODE_ITEMS), CARDS_MODE_CLUMP, "How the hair cards are generated"),
         "cards_body_face_dilation": ("int", (0, 8), 1,
                                      "How many rings of neighbouring body faces to add around the ones the asset actually grows from (body shell target only)"),
         "cards_selection_method": ("enum", _enum_items_with_index(SELECTION_METHOD_ITEMS), SELECTION_METHOD_RANDOM,
@@ -186,7 +186,8 @@ DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS = {
         "cards_cluster_count": ("int", (4, 500), 40, "Number of cluster cards to generate (cluster modes only)"),
         "cards_cluster_min_strands": ("int", (1, 50), 3, "Minimum strands required to form a cluster card (cluster modes only)"),
         "cards_cluster_seed": ("int", (0, 9999), 0, "Random seed for the clustering (cluster modes only)"),
-        "cards_cluster_samples": ("int", (2, 128), 24, "How many points each bundle's averaged curve is built from (cluster ribbon mode only)"),
+        "cards_cluster_samples": ("int", (2, 128), 24, "How many points each bundle's averaged curve is built from (cluster ribbon and clump modes only)"),
+        "cards_clump_max_tris": ("int", (100, 100000), 5000, "Triangle budget for the whole style: nearest clumps are merged until it fits (clump mode only)"),
         }
 
 def create_cards_config_properties(config_set, basemesh, asset_name):
@@ -280,10 +281,10 @@ def body_has_material(surface_obj):
     return surface_obj is not None and any(slot.material is not None for slot in surface_obj.material_slots)
 
 def get_cards_mode(config_set, basemesh, asset_name):
-    mode = config_set.get_value(f"{asset_name}_cards_mode", CARDS_MODE_TILES, entity_reference=basemesh)
+    mode = config_set.get_value(f"{asset_name}_cards_mode", CARDS_MODE_CLUMP, entity_reference=basemesh)
     if mode not in {item[0] for item in CARDS_MODE_ITEMS}:
         # A file from an older version can name a mode which no longer exists
-        return CARDS_MODE_TILES
+        return CARDS_MODE_CLUMP
     return mode
 
 def get_cards_selection_method(config_set, basemesh, asset_name):
