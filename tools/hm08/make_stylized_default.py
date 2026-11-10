@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Build the HM08 `stylized-default` target (STYLIZED_SPEC.md §6.1).
+
+Build-time source only: the result is later baked into sty01's rest shape (§5), it is not
+shipped as a user target.
+
+Every edit is a smooth deformation of the HM08 base mesh (all 19,158 vertices, helpers and
+joint cubes included, so fitting and rigging follow). Regions come from the default rig's skin
+weights, which give soft, symmetric masks for free. Coordinates are base.obj space: Y up,
++Z forward, decimetres.
+
+    python3 tools/hm08/make_stylized_default.py            # writes stylized-default.target.gz
+    python3 tools/hm08/make_stylized_default.py --measure  # prints the head/height check only
+"""
+import argparse
+import gzip
+import io
+import json
+import os
+import re
+
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "..", "..", "src", "mpfb", "data")
+OUT = os.path.join(HERE, "stylized-default.target.gz")
+
+# §6.1 scales, relative to the HM08 default.
+HEAD = 1.08
+CRANIUM = 1.04       # on top of HEAD, above the brow
+EYES = 1.12
+FLATTEN = 0.40       # nostril flare and ear interior relief
+HANDS = 1.12
+FEET = 1.10
+NECK = 1.10          # thickness, X and Z
+SHOULDERS = 1.06     # width at the shoulder joints
+WAIST = 0.96
+LOWER_LEG = 1.03
+
+LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
+                  r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
+
+
+def load_mesh():
+    verts, faces = [], []
+    with open(os.path.join(DATA, "3dobjs", "base.obj")) as f:
+        for line in f:
+            if line.startswith("v "):
+                verts.append([float(x) for x in line.split()[1:4]])
+            elif line.startswith("f "):
+                faces.append([int(t.split("/")[0]) - 1 for t in line.split()[1:]])
+    return np.array(verts), faces
+
+
+def apply_target(p, name, weight):
+    with gzip.open(os.path.join(DATA, "targets", name + ".target.gz"), "rt") as f:
+        for line in f:
+            if line[:1].isdigit():
+                i, x, y, z = line.split()
+                p[int(i)] += weight * np.array([float(x), float(y), float(z)])
+
+
+def default_adult(p0):
+    """HM08 with MPFB's default macros: gender, age, muscle, weight, height, proportions 0.5 and
+    the three races at 1/3. Breast (cup/firmness) targets are left out; they do not touch the head,
+    limbs or waist this target edits."""
+    p = p0.copy()
+    for g in ("female", "male"):
+        apply_target(p, f"macrodetails/universal-{g}-young-averagemuscle-averageweight", 0.5)
+        for race in ("african", "asian", "caucasian"):
+            apply_target(p, f"macrodetails/{race}-{g}-young", 0.5 / 3)
+    return p
+
+
+def load_groups():
+    with open(os.path.join(DATA, "mesh_metadata", "basemesh_vertex_groups.json")) as f:
+        raw = json.load(f)
+    return {k: np.concatenate([np.arange(a, b + 1) for a, b in v]) for k, v in raw.items()}
+
+
+def load_weights(n):
+    with open(os.path.join(DATA, "rigs", "standard", "weights.default.json")) as f:
+        raw = json.load(f)["weights"]
+    out = {}
+    for bone, pairs in raw.items():
+        w = np.zeros(n)
+        for i, v in pairs:
+            w[i] = v
+        out[bone] = w
+    return out
+
+
+def wsum(weights, pattern):
+    rx = re.compile(pattern)
+    return np.clip(sum(w for b, w in weights.items() if rx.search(b)), 0.0, 1.0)
+
+
+def smoothstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def neighbours(n, faces):
+    nb = [set() for _ in range(n)]
+    for f in faces:
+        for i, a in enumerate(f):
+            nb[a].update(f[:i] + f[i + 1:])
+    return [np.array(sorted(s)) if s else np.array([i]) for i, s in enumerate(nb)]
+
+
+def laplacian_smooth(p, nb, iterations):
+    q = p.copy()
+    for _ in range(iterations):
+        q = np.array([q[ix].mean(0) for ix in nb])
+    return q
+
+
+def scale_about(p, w, pivot, s):
+    """Blend p toward a uniform (or per-axis) scale about pivot by per-vertex weight w."""
+    return p + w[:, None] * (np.asarray(s) - 1.0) * (p - pivot)
+
+
+def build(p0, faces, groups, weights):
+    p = p0.copy()
+    jc = lambda name: p[groups[name]].mean(0)
+    side = np.sign(p0[:, 0])
+    body = groups["body"]
+
+    w_face = np.clip(sum(w for b, w in weights.items() if not LIMB.match(b)), 0.0, 1.0)
+    w_neck = wsum(weights, r"^neck")
+    w_hand = {s: wsum(weights, rf"^(wrist|metacarpal|finger).*\.{s}$") for s in "LR"}
+    w_foot = {s: wsum(weights, rf"^(foot|toe).*\.{s}$") for s in "LR"}
+    w_arm = wsum(weights, r"^(shoulder01|upperarm|lowerarm|wrist|metacarpal|finger)") + \
+        0.5 * wsum(weights, r"^clavicle")
+    w_torso = wsum(weights, r"^(spine|pelvis)")
+
+    # Lower leg +3%: everything below the knee moves down in proportion to its distance below it,
+    # so the shin stretches and the foot travels with the ankle.
+    knee_y, ankle_y = jc("joint-l-knee")[1], jc("joint-l-ankle")[1]
+    p[:, 1] -= (LOWER_LEG - 1.0) * np.clip(knee_y - p0[:, 1], 0.0, knee_y - ankle_y)
+
+    # Feet +10% about the ankle column at sole height, so soles stay flat.
+    for s, j in (("L", "joint-l-ankle"), ("R", "joint-r-ankle")):
+        a = jc(j)
+        pivot = np.array([a[0], p[body, 1].min(), a[2]])
+        p = scale_about(p, w_foot[s], pivot, FEET)
+
+    # Hands +12% about the wrist joint.
+    for s, j in (("L", "joint-l-hand"), ("R", "joint-r-hand")):
+        p = scale_about(p, w_hand[s], jc(j), HANDS)
+
+    # Waist -4%: X/Z squeeze of the torso, peaking at the narrowest torso height.
+    torso = body[(np.abs(p0[body, 0]) < 1.6) & (p0[body, 1] > 1.0) & (p0[body, 1] < 4.0)
+                 & (w_torso[body] > 0.9)]
+    ys = np.linspace(1.5, 3.8, 24)
+    widths = [np.ptp(p0[torso][np.abs(p0[torso, 1] - y) < 0.05, 0]) for y in ys]
+    waist_y = ys[int(np.argmin(widths))]
+    band = np.exp(-((p0[:, 1] - waist_y) / 0.7) ** 2) * w_torso
+    axis = np.array([0.0, 0.0, p0[torso, 2].mean()])
+    p = scale_about(p, band, axis, [WAIST, 1.0, WAIST])
+
+    # Shoulders +6%: the arms (and half the clavicle) shift out by 6% of the shoulder joint width.
+    sh_x = jc("joint-l-shoulder")[0]
+    p[:, 0] += (SHOULDERS - 1.0) * sh_x * side * np.clip(w_arm, 0.0, 1.0)
+
+    # Neck +10% thicker, X/Z about the neck's own axis; the head is masked out.
+    neck_c = p[w_neck > 0.5].mean(0)
+    w_neck_core = smoothstep(0.1, 0.5, w_neck) * (1.0 - w_face)
+    p = scale_about(p, w_neck_core, np.array([0.0, 0.0, neck_c[2]]), [NECK, 1.0, NECK])
+
+    # Head +8% about the top of the neck.
+    neck_top = jc("joint-neck") * 0.5 + jc("joint-head") * 0.5
+    p = scale_about(p, w_face, neck_top, HEAD)
+
+    # Cranium +4% more: about the eye line, weighted from the brow up, so the face is smaller
+    # relative to the skull.
+    eye_y = jc("joint-l-eye")[1]
+    head_c = p[w_face > 0.9].mean(0)
+    w_cran = w_face * smoothstep(eye_y - 0.1, eye_y + 0.6, p[:, 1])
+    p = scale_about(p, w_cran, np.array([0.0, eye_y, head_c[2]]), CRANIUM)
+
+    # Eye sockets and lids +12% about each eyeball centre; the eyeball helpers ride along (D6).
+    # +12% is against the default adult, so the head's +8% is divided out here.
+    for j, helper in (("joint-l-eye", "helper-l-eye"), ("joint-r-eye", "helper-r-eye")):
+        c = jc(j)
+        r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
+        r = np.linalg.norm(p - c, axis=1)
+        p = scale_about(p, 1.0 - smoothstep(r_eye * 1.3, r_eye * 2.6, r), c, EYES / HEAD)
+
+    # Nostril flare and ear interior: remove 40% of the relief left after smoothing.
+    nb = neighbours(len(p), faces)
+    smooth = laplacian_smooth(p, nb, 8)
+    front = body[np.abs(p0[body, 0]) < 0.4]
+    nose_tip = p[front[np.argmax(p[front, 2] * (p0[front, 1] > eye_y - 0.8) * (p0[front, 1] < eye_y))]]
+    nostrils = nose_tip + np.array([0.0, -0.12, -0.12])
+    w_flat = (1.0 - smoothstep(0.14, 0.26, np.linalg.norm(p - nostrils, axis=1))) * \
+        smoothstep(nostrils[1] - 0.16, nostrils[1] - 0.06, p[:, 1])  # stop above the upper lip
+    head_band = body[(np.abs(p0[body, 1] - eye_y) < 0.4) & (w_face[body] > 0.9)]
+    for s in (1.0, -1.0):
+        cand = head_band[side[head_band] == s]
+        ear = p[cand[np.argmax(np.abs(p[cand, 0]))]] - np.array([s * 0.1, 0.0, 0.0])
+        w_flat = np.maximum(w_flat, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
+    w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
+    p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
+
+    # Keep the soles on the ground plane.
+    p[:, 1] += p0[body, 1].min() - p[body, 1].min()
+    return p
+
+
+def measure(p, groups, weights):
+    """Head height (crown to chin) over total height, on the body mesh."""
+    body = groups["body"]
+    w_face = np.clip(sum(w for b, w in weights.items() if not LIMB.match(b)), 0.0, 1.0)
+    b = p[body]
+    crown, sole = b[:, 1].max(), b[:, 1].min()
+    neck_z = p[groups["joint-neck"]].mean(0)[2]
+    chin_set = (np.abs(b[:, 0]) < 0.05) & (w_face[body] > 0.5) & (b[:, 2] > neck_z + 0.6)
+    chin = b[chin_set, 1].min()
+    return (crown - chin) / (crown - sole), crown - chin, crown - sole
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--measure", action="store_true")
+    args = ap.parse_args()
+    raw, faces = load_mesh()
+    p0 = default_adult(raw)
+    groups, weights = load_groups(), load_weights(len(p0))
+    p = build(p0, faces, groups, weights)
+    for label, q in (("hm08 raw", raw), ("hm08 default adult", p0), ("stylized-default", p)):
+        r, h, t = measure(q, groups, weights)
+        print(f"{label}: head {h:.3f} dm, height {t:.3f} dm, head/height {r:.4f} "
+              f"({1 / r:.2f} heads)")
+    if args.measure:
+        return
+    d = p - p0
+    keep = np.abs(d).max(1) >= 1e-5
+    with io.TextIOWrapper(gzip.GzipFile(OUT, "wb", mtime=0)) as f:  # mtime=0: reproducible bytes
+        f.write("# stylized-default: STYLIZED_SPEC.md 6.1, built by make_stylized_default.py\n")
+        for i in np.nonzero(keep)[0]:
+            f.write(f"{i} {d[i, 0]:.5f} {d[i, 1]:.5f} {d[i, 2]:.5f}\n")
+    print(f"wrote {OUT}: {keep.sum()} vertices")
+
+
+if __name__ == "__main__":
+    main()
