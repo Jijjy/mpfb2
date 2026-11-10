@@ -154,22 +154,6 @@ Set the skin material for a character. STYLIZED (STYLIZED_SPEC.md 7.1) is the on
 A path which does not exist is logged as a warning, reported through `operator` if one was given, and
 dropped; the skin is still built, without a material source.
 
-----------|------|---------|-------------|
-| `mhmat_file` | `str \| None` | — | Absolute path to the MHMAT skin material file. `None` is only valid together with `skin_type="LAYERED"`, which then builds the material with no mhmat values; every other skin type reaches a loader which requires a path |
-| `basemesh` | `bpy.types.Object` | — | The basemesh to apply the skin to |
-| `bodyproxy` | `bpy.types.Object \| None` | `None` | Optional body proxy; auto-discovered if `None` |
-| `skin_type` | `str` | `"ENHANCED_SSS"` | Skin material type: `"MAKESKIN"`, `"GAMEENGINE"`, `"LAYERED"`, `"ENHANCED"`, or `"ENHANCED_SSS"` |
-| `material_instances` | `bool` | `True` | Create separate material slots per body zone |
-| `slot_overrides` | `dict[str, dict[str, Any]] \| None` | `None` | Per-slot material settings keyed by zone name (e.g., `"body"`, `"face"`) |
-| `operator` | `bpy.types.Operator \| None` | `None` | Keyword-only. Optional operator used to report a missing mhmat file as a `WARNING` |
-
-**Returns:** `None`
-
-A path which does not exist is handled rather than passed on: a warning is logged, the `operator` is
-asked to report it if one was given, the argument is dropped, and the method returns without creating
-anything unless `skin_type` is `"LAYERED"`. A `mhmat_file` of `None` does not go through that check, so
-it reaches the per-type material builders directly.
-
 ---
 
 #### unload_mhclo_asset(basemesh, asset)
