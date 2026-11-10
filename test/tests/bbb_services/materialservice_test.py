@@ -86,21 +86,6 @@ def test_identify_material_stylized_skin():
     ObjectService.delete_object(basemesh)
 
 
-def test_add_focus_nodes_makeskin():
-    obj = _create_human_with_makeskin_material()
-    assert obj
-    material = MaterialService.get_material(obj)
-    # Test might look odd, but the logic is different with 2+ materials
-    assert MaterialService.get_number_of_ink_layers(material) == 0
-    MaterialService.add_focus_nodes(material)
-    assert MaterialService.get_number_of_ink_layers(material) == 1
-    MaterialService.add_focus_nodes(material)
-    assert MaterialService.get_number_of_ink_layers(material) == 2
-    MaterialService.add_focus_nodes(material)
-    assert MaterialService.get_number_of_ink_layers(material) == 3
-    ObjectService.delete_object(obj)
-
-
 def test_only_stylized_skin_can_be_created():
     """HumanService.set_character_skin() -- STYLIZED is the only skin type (STYLIZED_SPEC.md 11)"""
     import pytest

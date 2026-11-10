@@ -16,10 +16,6 @@ class MPFB_PT_MatopsPanel(Abstract_Panel):
     bl_options = {'DEFAULT_CLOSED'}
     bl_parent_id = "MPFB_PT_Operations_Panel"
 
-    def _makeup(self, scene, layout):
-        box = self.create_box(layout, "Makeup")
-        box.operator("mpfb.remove_makeup")
-
     def _adjust(self, scene, layout):
         box = self.create_box(layout, "Adjust material")
         box.operator("mpfb.set_normalmap")
@@ -41,7 +37,6 @@ class MPFB_PT_MatopsPanel(Abstract_Panel):
         # material = MaterialService.get_material(context.active_object)
         # _LOG.dump("Material", (material, MaterialService.identify_material(material)))
 
-        self._makeup(scene, layout)
         self._adjust(scene, layout)
 
 ClassManager.add_class(MPFB_PT_MatopsPanel)

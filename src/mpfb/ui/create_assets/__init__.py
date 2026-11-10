@@ -10,4 +10,3 @@ from .makeweight import *
 from .makepose import *
 from .makeexpression import *
 from .makerig import *
-from .makeup import *

@@ -252,10 +252,9 @@ class BasemeshWithMakeSkinFixture:
 class BasemeshWithMakeSkinFixture:
     """Creates a basemesh with a MakeSkin material applied.
 
-    Satisfies the precondition for MPFB_OT_Remove_Makeup_Operator and
-    MPFB_OT_Set_Normalmap_Operator, which require a makeskin material (the
-    only type that carries ink layers and normal maps since the realistic
-    skins were removed).
+    Satisfies the precondition for MPFB_OT_Set_Normalmap_Operator, which
+    requires a makeskin material (the only type that carries normal maps
+    since the realistic skins were removed).
     """
 
     def __init__(self):

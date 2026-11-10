@@ -1,7 +1,0 @@
-{
-    "type": "boolean",
-    "name": "create_ink",
-    "description": "Create an empty ink layer image texture",
-    "label": "Create texture",
-    "default": true
-}

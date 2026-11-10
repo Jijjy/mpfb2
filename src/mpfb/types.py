@@ -119,7 +119,7 @@ It is what ``HumanService`` writes as ``human.<name>.json``, what it reads back,
 file is parsed into. ``phenotype`` holds a ``MacroInfo`` and ``targets`` a list of
 ``TargetStackEntry``. ``rig``, ``eyes``, ``eyebrows``, ``eyelashes``, ``tongue``, ``teeth``,
 ``hair``, ``proxy``, ``skin_mhmat``, ``skin_material_type`` and ``eyes_material_type`` hold strings,
-``clothes``, ``makeup`` and ``expressions`` lists, and ``skin_material_settings``,
+``clothes`` and ``expressions`` lists, and ``skin_material_settings``,
 ``eyes_material_settings``, ``alternative_materials`` and ``color_adjustments`` nested dicts. ``name``
 is added by the loading path rather than stored in the file.
 
