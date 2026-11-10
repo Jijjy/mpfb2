@@ -150,8 +150,8 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
             mh_material = MakeSkinMaterial()
 
         if basic_type in ["Bodypart", "Eyes", "Clothes"]:
-            if "Eye" in basic_type and ui["procedural_eyes"]:
-                mh_material = "procedural_eyes"
+            if "Eye" in basic_type:
+                mh_material = "stylized_eyes"
             else:
                 mh_material = MakeSkinMaterial()
 
@@ -164,10 +164,10 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
             if basic_type == "Basemesh":
                 mh_material.populate_from_body_material_socket_call()
             else:
-                if mh_material != "procedural_eyes":
+                if mh_material != "stylized_eyes":
                     mh_material.populate_from_proxy_material_socket_call(proxy_info["uuid"])
 
-            if mh_material != "procedural_eyes":
+            if mh_material != "stylized_eyes":
                 mh_material.apply_node_tree(blender_material)
             else:
                 NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
@@ -374,9 +374,6 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         ui = importer["settings_from_ui"]
         derived = importer["derived_settings"]
 
-        if not ui["procedural_eyes"]:
-            _LOG.info("Skipping eye material adjustment since not using procedural eyes")
-            return
         matset = ui["eye_settings_for_import"]
         if not matset:
             _LOG.info("Skipping eye material adjustment since they're not requested")

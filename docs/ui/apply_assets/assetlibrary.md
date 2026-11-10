@@ -337,7 +337,6 @@ Loaded from JSON files in `src/mpfb/ui/apply_assets/assetlibrary/properties/` wi
 | `makeclothes_metadata` | boolean | `false` | Store MakeClothes-specific metadata on the object (only needed if the clothes will be re-edited in MakeClothes) |
 | `override_bake_check` | boolean | `false` | Allow equipping clothes on baked (non-deforming) basemeshes. By default MPFB blocks this because it often produces unexpected results |
 | `second_root` | string | `""` | Override the secondary asset root directory (normally set in the MPFB preferences) |
-| `procedural_eyes` | boolean | `true` | Apply a procedural texture to eyes rather than using the standard image-based material |
 
 ### ALTM_ — alternative material properties
 

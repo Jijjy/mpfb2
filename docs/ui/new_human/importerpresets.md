@@ -28,7 +28,7 @@ The panel is organised into collapsible boxes:
 - **What to import** — `import_body`, `import_body_proxy`, `import_body_parts`, `import_clothes`, `import_rig`, `rig_as_parent`.
 - **General** — `scale_factor`, `feet_on_ground`, `create_collection`, `collections_as_children`, `prefix_object_names`.
 - **Mesh and groups** — `mask_base_mesh`, `add_subdiv_modifier`, `subdiv_levels`, `handle_helpers`, `detailed_helpers`, `extra_vertex_groups`.
-- **Materials** — `skin_material_type`, `material_named_from_object`, `prefix_material_names`, `material_creation_policy`, `material_instances`, `procedural_eyes`, `fix_bad_roughness`.
+- **Materials** — `skin_material_type`, `material_named_from_object`, `prefix_material_names`, `material_creation_policy`, `material_instances`, `fix_bad_roughness`.
 
 ## Operators
 
@@ -89,7 +89,6 @@ Creates a new preset file with a name taken from the `name` text field. Before s
 | `name` | string | `""` | The name to use when saving a new preset. Must be non-empty and contain no spaces. |
 | `prefix_material_names` | boolean | `true` | Prepend the character's name to all material names to avoid conflicts when multiple characters are in the same file. |
 | `prefix_object_names` | boolean | `true` | Prepend the character's name to all object names in Blender. |
-| `procedural_eyes` | boolean | `true` | Use the procedural eye texture shader (generates eye appearance mathematically) instead of a texture image. |
 | `rig_as_parent` | boolean | `true` | Make the rig the parent object of the body mesh and all other character objects. If disabled, the basemesh becomes the parent. |
 | `scale_factor` | enum | `"METER"` | The real-world unit that one Blender unit should represent. Options: `METER` (character is approximately 1.7 m tall in Blender units), `DECIMETER`, `CENTIMETER`. |
 | `skin_material_type` | enum | `"ENHANCED"` | The skin material model to use. Options: `ENHANCED` (MPFB's enhanced skin shader with PBR support), `SSS` (subsurface scattering shader), `PLAIN` (simple diffuse material). |

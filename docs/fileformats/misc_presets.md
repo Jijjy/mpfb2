@@ -47,7 +47,6 @@ use their defaults.
 - `prefix_material_names` (boolean, default: false) — Add a prefix to material names.
 - `material_creation_policy` (string, default: `"REUSE"`) — How to handle existing materials: `"REUSE"`, `"NEWNAME"`, or `"OVERWRITE"`.
 - `material_instances` (boolean, default: false) — Use material instances.
-- `procedural_eyes` (boolean, default: true) — Use procedural eye shaders.
 - `fix_bad_roughness` (boolean, default: true) — Fix roughness values from older assets.
 
 ### Example
@@ -61,8 +60,7 @@ use their defaults.
     "scale_factor": "METER",
     "feet_on_ground": true,
     "handle_helpers": "HIDE",
-    "skin_material_type": "ENHANCED",
-    "procedural_eyes": true
+    "skin_material_type": "ENHANCED"
 }
 ```
 
