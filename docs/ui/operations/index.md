@@ -16,7 +16,7 @@ One child panel, "MPFB Bone Strategies", is unusual: rather than appearing in th
 | `boneops/` | "MPFB Bone Strategies" | Configure head/tail/roll placement strategies for bones in a custom rig definition (Properties editor, Bone context) |
 | `exportops/` | "Export copy" | Create a deep copy of the character prepared for export to other applications |
 | `faceops/` | "Face operations" | Load facial shape key packs (visemes, face units) and configure the Lip Sync addon |
-| `matops/` | "Material" | Material operations: set a normal map, replace with v2 skin material |
+| `matops/` | "Material" | Material operations: set a normal map |
 | `poseops/` | "Poses" | Apply current pose as rest pose, or copy a pose from one rig to another |
 | `rigops/` | "Rig operations" | Rig-level operations, including the legacy "convert to rigify" workflow for MakeHuman-imported characters |
 | `sculpt/` | "Set up for sculpt" | Prepare a character mesh for sculpting with optional multiresolution setup and baking configuration |

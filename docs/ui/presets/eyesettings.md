@@ -6,7 +6,7 @@
 
 ## Overview
 
-The "Eye material save files" panel saves and loads the shader parameters of the procedural eye material. Like the Enhanced Skin material, the procedural eye material is a node-based shader whose visual properties — iris colour, sclera colour, specularity, and so on — are controlled by input socket values on a `ShaderNodeGroup`. This panel serialises those socket values to a JSON file for later reuse.
+The "Eye material save files" panel saves and loads the shader parameters of the procedural eye material. The procedural eye material is a node-based shader whose visual properties — iris colour, sclera colour, specularity, and so on — are controlled by input socket values on a `ShaderNodeGroup`. This panel serialises those socket values to a JSON file for later reuse.
 
 Save files use the naming convention `eye_settings.{name}.json` and are stored in the user config directory. A built-in default settings file (`eye_settings.default.json`) is copied into that directory the first time the panel is initialised.
 

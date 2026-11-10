@@ -115,7 +115,6 @@ Tools for generating v2 material wrapper Python code from the currently open sha
 - Property: `mhmat_based` — when enabled, the generated code includes conditional logic that reads values from a MakeHuman `.mhmat` material file.
 - Property: `output_material_name` — the name used for the generated Python class and output files.
 - Button: `mpfb.write_material` — **dangerous code generation**: writes a new material wrapper Python file plus test file into the addon's source tree.
-- Button: `mpfb.replace_with_skin` — wipes the currently open node tree and inserts MPFB's built-in v2 skin material (`NodeWrapperSkin`).
 
 ---
 
@@ -312,22 +311,6 @@ Calls `NodeService.ensure_v2_node_groups_exist(fail_on_validation=True)`, which 
 | Poll | Shader Node Editor context (`context.area.ui_type == "ShaderNodeTree"`) |
 
 Iterates `bpy.data.node_groups` and removes every node group whose name starts with "mpfb" (case-insensitive). This is a destructive operation — it permanently removes the groups from the Blender file. Typically used before re-running `mpfb.create_groups` to obtain a clean rebuild of all v2 node groups.
-
----
-
-### MPFB_OT_Replace_With_Skin_Operator
-
-**Source:** `src/mpfb/ui/developer/operators/replacewithskin.py`
-
-| Attribute | Value |
-|---|---|
-| `bl_idname` | `mpfb.replace_with_skin` |
-| `bl_label` | "Skin" |
-| `bl_options` | `{'REGISTER'}` |
-| Base class | `MpfbOperator` |
-| Poll | Shader Node Editor context (`context.area.ui_type == "ShaderNodeTree"`) |
-
-Clears the currently open node tree and replaces its entire content with MPFB's v2 skin material by calling `NodeWrapperSkin.create_instance(node_tree)`. This is a destructive, in-place replacement — the previous node setup is lost. Primarily a convenience for quickly testing or inspecting the v2 skin material structure.
 
 ---
 

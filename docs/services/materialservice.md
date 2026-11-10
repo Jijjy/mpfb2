@@ -2,7 +2,7 @@
 
 ## Overview
 
-MaterialService handles the creation, identification, modification, and management of materials assigned to Blender objects within MPFB. It supports multiple material types, each with distinct node tree structures: **MakeSkin** (the standard MakeHuman material format), **enhanced skin** (procedural skin with pore detail), **layered skin** (procedural skin with color control groups), **procedural eyes**, and **game engine** (simple Principled BSDF).
+MaterialService handles the creation, identification, modification, and management of materials assigned to Blender objects within MPFB. It supports multiple material types, each with distinct node tree structures: **stylized skin** (`NodeWrapperStylizedSkin`, STYLIZED_SPEC.md 7.1), **procedural eyes** (the stylized eye material), **MakeSkin** (`.mhmat` materials on clothes and proxies) and **game engine** (simple Principled BSDF).
 
 The service provides a complete material lifecycle: creating empty or skin-specific materials, assigning them to objects, creating per-body-part material slots, and loading/saving materials from `.blend` files.
 
@@ -19,7 +19,6 @@ MaterialService also provides static viewport diffuse colors for different body 
 | `LogService` | Logging via `LogService.get_logger("services.materialservice")` |
 | `ObjectService` | Object activation, vertex group queries, material slot assignment |
 | `NodeService` | Shader node creation, linking, querying, and manipulation |
-| `NodeWrapperSkin` | Creating the v2 enhanced skin node group |
 | `MakeSkinMaterial` | Parsing `.mhmat` files for texture references (imported at call time) |
 
 ## Material Type Identifiers
@@ -29,15 +28,14 @@ The `identify_material()` method returns one of these string identifiers:
 | Type | Description |
 |------|-------------|
 | `"empty"` | Material is `None` or has no nodes |
-| `"enhanced_skin"` | Procedural skin with `Pore detail` parameter in a shader group |
-| `"procedural_eyes"` | Procedural eyes with `IrisSection4Color` parameter in a shader group |
-| `"layered_skin"` | Procedural skin with `NavelCenterOverride` parameter in a shader group |
+| `"stylized_skin"` | Stylized skin with `BloodTint` parameter in a shader group |
+| `"procedural_eyes"` | Stylized eyes with `IrisInner` parameter in a shader group |
 | `"makeskin"` | MakeHuman MakeSkin material (has `diffuseIntensity` node) |
 | `"gameengine"` | Simple material with a `Principled BSDF` node |
 | `"unknown"` | None of the above patterns matched |
 
 `identify_material()` returns these as the `MaterialType` literal rather than a bare `str`, so the type
-tests the rest of the module performs against the result are checked against the same seven values.
+tests the rest of the module performs against the result are checked against the same six values.
 
 ## Module-Level Types
 
@@ -46,7 +44,7 @@ shapes they describe.
 
 | Name | Definition | Notes |
 |------|------------|-------|
-| `MaterialType` | `Literal["empty", "enhanced_skin", "procedural_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]` | The seven answers `identify_material()` can give |
+| `MaterialType` | `Literal["empty", "stylized_skin", "procedural_eyes", "makeskin", "gameengine", "unknown"]` | The six answers `identify_material()` can give |
 | `ColorAdjustment` | `dict[str, Any]` | The socket-name to default-value mapping `find_color_adjustment()` returns and `apply_color_adjustment()` accepts. The values are whatever `NodeService.get_node_info()` read off the sockets, which for a mix node means a mixture of floats and RGBA sequences, so `Any` is the honest value type |
 
 ## Public API
@@ -76,22 +74,6 @@ Assign a material to an object by name. If a material with the given name alread
 | `blender_object` | `bpy.types.Object \| None` | — | The object to assign the material to. A `None` object is accepted: the material is created or looked up but assigned to nothing |
 
 **Returns:** `bpy.types.Material` — The assigned material.
-
----
-
-#### create_v2_skin_material(name, blender_object=None, mhmat_file=None)
-
-Create a v2 enhanced skin material using the `NodeWrapperSkin` node group. Deletes any existing materials on the object first. If an `.mhmat` file is provided, diffuse and normal map textures are extracted and connected.
-
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `name` | `str` | — | The name for the skin material |
-| `blender_object` | `bpy.types.Object \| None` | `None` | The object to assign the material to. Optional in form only — a `None` object raises, despite the default |
-| `mhmat_file` | `str \| None` | `None` | Optional path to an `.mhmat` file for texture setup |
-
-**Returns:** `bpy.types.Material` — The created skin material.
-
-**Raises:** `ValueError` if `blender_object` is `None` or if the node tree cannot be determined.
 
 ---
 
@@ -162,7 +144,7 @@ Determine the type of a material by examining its node tree structure. Checks fo
 |----------|------|---------|-------------|
 | `material` | `bpy.types.Material \| None` | — | The material to identify. A `None` material gives `"empty"` |
 
-**Returns:** `MaterialType` — One of the seven material type identifiers (see the section above).
+**Returns:** `MaterialType` — One of the six material type identifiers (see the section above).
 
 ---
 
@@ -170,7 +152,7 @@ Determine the type of a material by examining its node tree structure. Checks fo
 
 #### set_normalmap(material, filename)
 
-Set a normal map texture on a material. Creates the necessary normal map and image texture nodes if they don't exist, and connects them to the Principled BSDF or bump node. Works with `enhanced_skin`, `makeskin`, and `layered_skin` material types.
+Set a normal map texture on a material. Creates the necessary normal map and image texture nodes if they don't exist, and connects them to the Principled BSDF or bump node. Works only with `makeskin` materials; any other type raises `ValueError`.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -317,11 +299,6 @@ Return all static viewport display colors as a dictionary, keyed by MPFB object 
 ```python
 from mpfb.services.materialservice import MaterialService
 
-# Create a v2 skin material from an mhmat file
-skin_mat = MaterialService.create_v2_skin_material(
-    "CharacterSkin", basemesh, mhmat_file="/path/to/skin.mhmat"
-)
-
 # Create per-body-part material slots
 MaterialService.create_and_assign_material_slots(basemesh, bodyproxy=proxy)
 ```
@@ -334,7 +311,7 @@ from mpfb.services.materialservice import MaterialService
 # Identify the material type
 material = basemesh.data.materials[0]
 mat_type = MaterialService.identify_material(material)
-print(f"Material type: {mat_type}")  # e.g., "enhanced_skin"
+print(f"Material type: {mat_type}")  # e.g., "stylized_skin"
 
 # Set a normal map
 MaterialService.set_normalmap(material, "/path/to/normal_map.png")

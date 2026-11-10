@@ -66,7 +66,6 @@ documented appear with plain text class names.
 | `developer/operators/listloglevels.py` | `mpfb.list_log_levels` | "List log levels" | [MPFB_OT_List_Log_Levels_Operator](developer/developer.md) | `MpfbOperator` |
 | `developer/operators/loadnodes.py` | `mpfb.load_nodes` | "Load nodes" | [MPFB_OT_Load_Nodes_Operator](developer/developer.md) | `MpfbOperator`, `ImportHelper` |
 | `developer/operators/loadtarget.py` | `mpfb.load_target` | "Load targets" | [MPFB_OT_Load_Target_Operator](developer/developer.md) | `MpfbOperator`, `ImportHelper` |
-| `developer/operators/replacewithskin.py` | `mpfb.replace_with_skin` | "Skin" | [MPFB_OT_Replace_With_Skin_Operator](developer/developer.md) | `MpfbOperator` |
 | `developer/operators/resetloglevels.py` | `mpfb.reset_log_levels` | "Reset log levels" | [MPFB_OT_Reset_Log_Levels_Operator](developer/developer.md) | `MpfbOperator` |
 | `developer/operators/rewritenodetypes.py` | `mpfb.rewrite_node_types` | "Rewrite node types" | [MPFB_OT_Rewrite_Node_Types_Operator](developer/developer.md) | `MpfbOperator` |
 | `developer/operators/savenodes.py` | `mpfb.save_nodes` | "Save nodes" | [MPFB_OT_Save_Nodes_Operator](developer/developer.md) | `MpfbOperator`, `ExportHelper` |
@@ -112,14 +111,10 @@ documented appear with plain text class names.
 | `operations/exportops/operators/createexportcopy.py` | `mpfb.export_copy` | "Create export copy" | [MPFB_OT_Create_Export_Copy_Operator](operations/exportops.md) | `MpfbOperator` |
 | `operations/faceops/operators/configurelipsync.py` | `mpfb.configure_lip_sync` | "Assign Lip Sync shape keys" | [MPFB_OT_Configure_Lip_Sync_Operator](operations/faceops.md) | `MpfbOperator` |
 | `operations/faceops/operators/loadfaceshapekeys.py` | `mpfb.load_face_shape_keys` | "Load face shape keys" | [MPFB_OT_Load_Face_Shape_Keys_Operator](operations/faceops.md) | `MpfbOperator` |
-| `operations/matops/operators/createv2skin.py` | `mpfb.create_v2_skin` | "Create v2 skin" | [MPFB_OT_Create_V2_Skin_Operator](operations/matops.md) | `MpfbOperator` |
 | `operations/matops/operators/setnormalmap.py` | `mpfb.set_normalmap` | "Set normalmap" | [MPFB_OT_Set_Normalmap_Operator](operations/matops.md) | `MpfbOperator`, `ImportHelper` |
 | `operations/poseops/operators/apply_pose.py` | `mpfb.apply_pose` | "Apply as rest pose" | [MPFB_OT_Apply_Pose_Operator](operations/poseops.md) | `MpfbOperator` |
 | `operations/poseops/operators/copy_pose.py` | `mpfb.copy_pose` | "Copy pose" | [MPFB_OT_Copy_Pose_Operator](operations/poseops.md) | `MpfbOperator` |
 | `operations/sculpt/operators/setupsculpt.py` | `mpfb.setup_sculpt` | "Set up mesh for sculpt" | [MPFB_OT_Setup_Sculpt_Operator](operations/sculpt.md) | `MpfbOperator` |
-| `presets/enhancedsettings/operators/applysettings.py` | `mpfb.enhancedsettings_apply_settings` | "Apply selected presets" | [MPFB_OT_ApplyEnhancedSettingsOperator](presets/enhancedsettings.md) | `MpfbOperator` |
-| `presets/enhancedsettings/operators/overwritesettings.py` | `mpfb.overwrite_enhanced_settings` | "Overwrite settings" | [MPFB_OT_OverwriteEnhancedSettingsOperator](presets/enhancedsettings.md) | `MpfbOperator` |
-| `presets/enhancedsettings/operators/savenewsettings.py` | `mpfb.save_new_enhanced_settings` | "Save new settings" | [MPFB_OT_SaveNewEnhancedSettingsOperator](presets/enhancedsettings.md) | `MpfbOperator` |
 | `presets/eyesettings/operators/applysettings.py` | `mpfb.eyesettings_apply_settings` | "Apply selected presets" | [MPFB_OT_ApplyEyeSettingsOperator](presets/eyesettings.md) | `MpfbOperator` |
 | `presets/eyesettings/operators/overwritesettings.py` | `mpfb.overwrite_eye_settings` | "Overwrite settings" | [MPFB_OT_OverwriteEyeSettingsOperator](presets/eyesettings.md) | `MpfbOperator` |
 | `presets/eyesettings/operators/savenewsettings.py` | `mpfb.save_new_eye_settings` | "Save new settings" | [MPFB_OT_SaveNewEyeSettingsOperator](presets/eyesettings.md) | `MpfbOperator` |

@@ -5,7 +5,7 @@ This file explains the node tree JSON format used by MPFB to define Blender shad
 ## Purpose
 
 A node tree file defines a complete Blender shader node network as JSON. This allows MPFB to create
-procedural materials (enhanced skin, procedural eyes, MakeSkin materials) from templates with conditional
+procedural materials (MakeSkin materials) from templates with conditional
 nodes and variable substitution. Node tree files are located in `src/mpfb/data/node_trees/`.
 
 In most cases, these files are not written by hand. There is some tooling available in the shader

@@ -6,70 +6,9 @@ This structure is used both in standalone files (as described below) and as keys
 
 ## Purpose
 
-Material settings presets store shader parameter values for MPFB's procedural materials. There are two types:
+Material settings presets store shader parameter values for the stylized eye material.
 
-- **Enhanced skin settings** — Per-zone skin parameters (body, ears, lips, etc.) for the enhanced skin shader.
-- **Eye settings** — Parameters for the procedural eye shader.
-
-User presets are saved in the user config directory with the naming pattern `enhanced_settings.<name>.json` or `eye_settings.<name>.json`.
-
-## Structure: Enhanced skin settings
-
-An enhanced skin settings file is a JSON object where each key is a body zone name. The values are parameter
-dictionaries for that zone.
-
-### Zone names
-
-The standard zones are: `body`, `ears`, `fingernails`, `genitals`, `lips`, `nipple`, `toenails`.
-
-### Zone parameters
-
-Each zone object has these keys:
-
-- `Brightness` (float) — Color brightness adjustment.
-- `Clearcoat` (float) — Clearcoat intensity for a shiny appearance. Range 0.0 to 1.0.
-- `Clearcoat Roughness` (float) — Roughness of the clearcoat layer. Range 0.0 to 1.0.
-- `Contrast` (float) — Color contrast adjustment.
-- `Pore detail` (float) — Pore detail level. Range approximately 1.0 to 4.0.
-- `Pore distortion` (float) — Distortion of the pore pattern. Range approximately 0.0 to 2.0.
-- `Pore scale` (float) — Scale of the pore texture. Range approximately 500 to 4000.
-- `Pore strength` (float) — Intensity of pore effects. Range 0.0 to 1.0.
-- `Roughness` (float) — Surface roughness. Range 0.0 to 1.0.
-- `colorMixIn` (array of 4 floats) — RGBA color to mix into the base color.
-- `colorMixInStrength` (float) — How strongly the mix-in color is applied. Range 0.0 to 1.0.
-
-### Example
-
-```json
-{
-    "body": {
-        "Brightness": 0.0,
-        "Clearcoat": 0.2,
-        "Clearcoat Roughness": 0.4,
-        "Contrast": 0.0,
-        "Pore detail": 2.0,
-        "Pore distortion": 0.5,
-        "Pore scale": 2000.0,
-        "Pore strength": 0.3,
-        "Roughness": 0.45,
-        "colorMixIn": [0.5, 0.3, 0.2, 1.0],
-        "colorMixInStrength": 0.0
-    },
-    "lips": {
-        "Brightness": 0.0,
-        "Clearcoat": 0.5,
-        "Clearcoat Roughness": 0.2,
-        "Contrast": 0.0,
-        "Pore detail": 2.0,
-        "Pore distortion": 0.5,
-        "Pore scale": 2000.0,
-        "Pore strength": 0.1,
-        "Roughness": 0.3,
-        "colorMixIn": [0.6, 0.2, 0.2, 1.0],
-        "colorMixInStrength": 0.0
-    }
-}
-```
+User presets are saved in the user config directory with the naming pattern `eye_settings.<name>.json`.
 
 ## Structure: Eye settings
 

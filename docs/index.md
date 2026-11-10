@@ -32,7 +32,7 @@ These describe JSON formats used internally by MPFB and for user presets:
 - [Vertex weights](fileformats/weights.md) — bone-to-vertex weight assignments
 - [Pose](fileformats/pose.md) — static bone rotations (system and user poses)
 - [Node tree / shader](fileformats/node_tree.md) — Blender shader node network definitions
-- [Material settings](fileformats/material_settings.md) — enhanced skin and eye parameter presets
+- [Material settings](fileformats/material_settings.md) — eye parameter presets
 - [Target metadata](fileformats/target_metadata.md) — target categories and macro morph definitions
 - [Mesh metadata](fileformats/mesh_metadata.md) — vertex groups, mesh config, UV layers
 - [Human preset](fileformats/human_preset.md) — complete character definition
@@ -127,7 +127,6 @@ In many cases, an entity class is a wrapper for a file format (see above).
 - [MHMAT key system](entities/material/mhmat_keys.md) — type hierarchy and key catalog for MHMAT parsing (`mhmatkeytypes.py`, `mhmatkeys.py`)
 - [MhMaterial](entities/material/mhmaterial.md) — parser and serializer for MHMAT material files
 - [MakeSkinMaterial](entities/material/makeskinmaterial.md) — bridges MHMAT format with Blender node-based materials (MakeSkin workflow)
-- [EnhancedSkinMaterial](entities/material/enhancedskinmaterial.md) — advanced skin shader with PBR and subsurface scattering support
 
 ### Socket import entities
 

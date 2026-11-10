@@ -11,7 +11,7 @@ Parsed key/value pairs are stored in the private `_settings` dict. Callers read 
 - **Disk file** — via `populate_from_mhmat`.
 - **Running MakeHuman instance** — via `populate_from_body_material_socket_call` or `populate_from_proxy_material_socket_call` (requires MakeHuman to be running and the socket connection to be active).
 
-`MhMaterial` is used as a base class by [`MakeSkinMaterial`](makeskinmaterial.md) and [`EnhancedSkinMaterial`](enhancedskinmaterial.md).
+`MhMaterial` is used as the base class of [`MakeSkinMaterial`](makeskinmaterial.md).
 
 > **A malformed line can abort the whole load rather than being skipped.** `_parse_material_line` uses the value a key's own parser produced without testing the `None` that parser returns for a line it could not read (see [the key system](mhmat_keys.md)), in two places, and a third lives in the parser itself. All three are reachable from a hand-written `.mhmat`:
 >

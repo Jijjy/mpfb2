@@ -44,7 +44,7 @@ Initialise `MakeSkinMaterial` with optional importer preset values.
 
 **Returns:** `None`.
 
-Unlike [`EnhancedSkinMaterial`](enhancedskinmaterial.md), this class never reads `self.presets`, so the `None` default is harmless here.
+This class never reads `self.presets`, so the `None` default is harmless here.
 
 ### Attributes
 

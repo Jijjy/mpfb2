@@ -130,7 +130,6 @@ Data models for the various asset types MPFB works with:
 | `clothes/vertexmatch.py` | `VertexMatch` — vertex matching for clothing fitting. |
 | `material/mhmaterial.py` | `MhMaterial` — parser and model for `.mhmat` material files. |
 | `material/makeskinmaterial.py` | MakeSkin material model. |
-| `material/enhancedskinmaterial.py` | Enhanced skin material model. |
 | `material/mhmatkeys.py`, `mhmatkeytypes.py` | Material property key and type definitions. |
 | `rig.py` | `Rig` entity. |
 | `meshcrossref.py` | `MeshCrossRef` — cross-referencing mesh data. |
