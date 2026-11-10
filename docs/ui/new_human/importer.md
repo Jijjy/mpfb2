@@ -24,10 +24,9 @@ This is the workflow to use when you have designed a character in MakeHuman and 
 | `bl_options` | `{'DEFAULT_CLOSED'}` |
 | Base class | `Abstract_Panel` |
 
-The panel draws three dropdown menus and an action button:
+The panel draws two dropdown menus and an action button:
 
 - **Presets to use** (`presets_for_import`) — select a named importer preset, or choose "FROM_UI" to use the values currently shown in the [Importer Presets](importerpresets.md) panel.
-- **Skin settings to use** (`skin_settings_for_import`) — select a named enhanced skin material settings file to apply automatically after import.
 - **Eye settings to use** (`eye_settings_for_import`) — select a named eye material settings file to apply automatically after import.
 - **Import human** — button that invokes `MPFB_OT_ImportHumanOperator`.
 
@@ -68,7 +67,6 @@ These properties are defined directly in `importerpanel.py` rather than in JSON 
 | Property | Type | Description |
 |---|---|---|
 | `presets_for_import` | enum (dynamic) | Named importer presets available to load. Populated by `UiService.get_importer_panel_list()`. The first option is always `"FROM_UI"`, which means "use the values currently shown in the Importer Presets panel" rather than loading from a file. |
-| `skin_settings_for_import` | enum (dynamic) | Enhanced skin material setting presets to apply after import. Populated by `UiService.get_importer_enhanced_settings_panel_list()`. These presets are created on the Materials panel. |
 | `eye_settings_for_import` | enum (dynamic) | Eye material setting presets to apply after import. Populated by `UiService.get_importer_eye_settings_panel_list()`. These presets are also created on the Materials panel. |
 
 ## Related

@@ -21,7 +21,7 @@ elsewhere and imported, and the Type columns below use those names.
 
 | Name | Declared in | Definition | Notes |
 |------|-------------|------------|-------|
-| `HumanInfo` | `src/mpfb/types.py` | `dict[str, Any]` | The character definition dictionary: what is written as `human.<name>.json`, read back, and what an MHM file is parsed into. An alias rather than a `TypedDict` because a preset written by an older MPFB carries only a subset of the keys, because the values arrive from `json.load()` as `Any`, and because the loading path writes `material_instances` and `name` into the dict it was handed |
+| `HumanInfo` | `src/mpfb/types.py` | `dict[str, Any]` | The character definition dictionary: what is written as `human.<name>.json`, read back, and what an MHM file is parsed into. An alias rather than a `TypedDict` because a preset written by an older MPFB carries only a subset of the keys, because the values arrive from `json.load()` as `Any`, and because the loading path writes `name` into the dict it was handed |
 | `DeserializationSettings` | `src/mpfb/types.py` | `dict[str, Any]` | The settings dict controlling how a `HumanInfo` is turned back into a character. An alias rather than a `TypedDict` because the mandatory key set differs between the three entry points — see `get_default_deserialization_settings()` and `deserialize_from_mhm()` below |
 | `MacroInfo` | `services/targetservice.py` | `dict[str, Any]` | The macro phenotype dictionary, as stored under `human_info["phenotype"]` |
 | `ColorAdjustment` | `services/materialservice.py` | `dict[str, Any]` | One socket-name to default-value mapping, as stored under `human_info["color_adjustments"][uuid]` |
@@ -50,7 +50,6 @@ deferred-import rule in `__init__.py`.
 | `Rig` | Rig entity for creating armatures from JSON definitions |
 | `MakeSkinMaterial` | MakeSkin material node tree generation |
 | `MhMaterial` | MHMAT file parsing |
-| `EnhancedSkinMaterial` | Enhanced skin material node tree generation |
 | `PrimitiveProfiler` | Performance profiling |
 
 ## Public API
@@ -135,12 +134,27 @@ Load an MHCLO asset (clothes, body part, proxy, etc.) and fully integrate it wit
 
 ---
 
-#### set_character_skin(mhmat_file, basemesh, bodyproxy=None, skin_type="ENHANCED_SSS", material_instances=True, slot_overrides=None, *, operator=None)
+#### set_character_skin(mhmat_file, basemesh, bodyproxy=None, skin_type="STYLIZED", slot_overrides=None, *, operator=None)
 
-Set the skin material for a character. Supports multiple skin material types: MAKESKIN (simple node-based), GAMEENGINE (optimized for game export), LAYERED (multi-group v2 skin), and ENHANCED/ENHANCED_SSS (procedural skin with optional subsurface scattering). When `material_instances` is enabled for enhanced skins, separate material slots are created for different body zones with per-slot settings from the default or overridden configuration.
+Set the skin material for a character. STYLIZED (STYLIZED_SPEC.md 7.1) is the only skin material: one
+`MpfbStylizedSkin` node group shared by the basemesh and the body proxy. Any other `skin_type` raises
+`ValueError`.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
+| `mhmat_file` | `str \| None` | — | Path of the skin asset the user picked. It is never read, only recorded as the `material_source`. `None` is valid |
+| `basemesh` | `bpy.types.Object` | — | The basemesh to apply the skin to |
+| `bodyproxy` | `bpy.types.Object \| None` | `None` | Optional body proxy; auto-discovered if `None` |
+| `skin_type` | `str` | `"STYLIZED"` | Must be `"STYLIZED"` |
+| `slot_overrides` | `dict[str, dict[str, Any]] \| None` | `None` | The `"stylized"` key holds group input values to set on the skin |
+| `operator` | `bpy.types.Operator \| None` | `None` | Keyword-only. Optional operator used to report a missing mhmat file as a `WARNING` |
+
+**Returns:** `None`
+
+A path which does not exist is logged as a warning, reported through `operator` if one was given, and
+dropped; the skin is still built, without a material source.
+
+----------|------|---------|-------------|
 | `mhmat_file` | `str \| None` | — | Absolute path to the MHMAT skin material file. `None` is only valid together with `skin_type="LAYERED"`, which then builds the material with no mhmat values; every other skin type reaches a loader which requires a path |
 | `basemesh` | `bpy.types.Object` | — | The basemesh to apply the skin to |
 | `bodyproxy` | `bpy.types.Object \| None` | `None` | Optional body proxy; auto-discovered if `None` |
@@ -366,8 +380,7 @@ HumanService.add_mhclo_asset(
 
 # Set the skin material
 HumanService.set_character_skin(
-    "/path/to/young_caucasian_female.mhmat", basemesh,
-    skin_type="ENHANCED_SSS", material_instances=True
+    "/path/to/young_caucasian_female.mhmat", basemesh
 )
 ```
 

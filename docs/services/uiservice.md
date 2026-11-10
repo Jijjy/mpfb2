@@ -129,49 +129,6 @@ until the matching `rebuild_` method has been called.
 
 ---
 
-### Enhanced Settings
-
-#### rebuild_enhanced_settings_panel_list()
-
-Rebuild the list of available enhanced skin settings.
-
-**Returns:** None
-
-Scans for files matching `enhanced_settings.*.json` in the user configuration directory.
-
----
-
-#### get_enhanced_settings_panel_list()
-
-Retrieve the list of available enhanced settings.
-
-**Returns:** `list[PanelEnumItem] | None` — List of settings tuples in Blender enum format, or `None`
-until the matching `rebuild_` method has been called.
-
----
-
-#### rebuild_importer_enhanced_settings_panel_list()
-
-Rebuild the list of available enhanced material settings for the importer.
-
-**Returns:** None
-
-The list includes special options:
-- `"CHARACTER"`: Match settings to character name
-- `"default"`: Use default settings
-- `"RAW"`: Don't modify material settings
-
----
-
-#### get_importer_enhanced_settings_panel_list()
-
-Retrieve the list of available enhanced material settings for the importer.
-
-**Returns:** `list[PanelEnumItem] | None` — List of settings tuples in Blender enum format, or `None`
-until the matching `rebuild_` method has been called.
-
----
-
 ### Eye Settings
 
 #### rebuild_eye_settings_panel_list()
@@ -264,7 +221,6 @@ The service discovers presets by scanning for JSON files with specific naming pa
 | Pattern | Purpose |
 |---------|---------|
 | `importer_presets.*.json` | Importer configuration presets |
-| `enhanced_settings.*.json` | Enhanced skin material settings |
 | `eye_settings.*.json` | Eye material settings |
 
 The `*` portion becomes the preset name. For example, `importer_presets.cartoon.json` creates a preset named "cartoon".
@@ -293,7 +249,6 @@ from mpfb.services.uiservice import UiService
 
 # Rebuild preset lists (typically done on addon load)
 UiService.rebuild_importer_presets_panel_list()
-UiService.rebuild_enhanced_settings_panel_list()
 UiService.rebuild_eye_settings_panel_list()
 
 # Get the presets for use in a panel
@@ -390,8 +345,6 @@ def after_preset_saved():
     # Rebuild all preset lists to include the new one
     UiService.rebuild_importer_presets_panel_list()
     UiService.rebuild_importer_panel_list()
-    UiService.rebuild_enhanced_settings_panel_list()
-    UiService.rebuild_importer_enhanced_settings_panel_list()
     UiService.rebuild_eye_settings_panel_list()
     UiService.rebuild_importer_eye_settings_panel_list()
 

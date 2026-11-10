@@ -87,11 +87,9 @@ class MPFB_PT_Importer_Presets_Panel(Abstract_Panel):
     def _materials_box(self, scene, layout):
         _LOG.enter()
         props = [
-            "skin_material_type",
             "material_named_from_object",
             "prefix_material_names",
             "material_creation_policy",
-            "material_instances",
             "fix_bad_roughness"
             ]
         IMPORTER_PRESETS_PROPERTIES.draw_properties(scene, layout, props)

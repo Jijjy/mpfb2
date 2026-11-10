@@ -2,7 +2,6 @@
 from .....services import LogService
 from .....services import LocationService
 from .....services import SocketService
-from .....services import ObjectService
 from .....services import MaterialService
 from .....services import NodeService
 from .....services import UiService
@@ -14,6 +13,8 @@ from .....entities.socketobject.socketbodyobject import SocketBodyObject
 from .....entities.socketobject.socketproxyobject import SocketProxyObject
 from .....entities.material.makeskinmaterial import MakeSkinMaterial
 from .....entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
+from .....entities.nodemodel.v2.materials.nodewrapperstylizedskin import NodeWrapperStylizedSkin, SUBSURFACE_SCALE_METERS
+from .....entities.objectproperties import GeneralObjectProperties
 import bpy, os, json
 
 _LOG = LogService.get_logger("newhuman.importhuman")
@@ -44,7 +45,6 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
 
         settings = IMPORTER_PRESETS_PROPERTIES.as_dict(entity_reference=context, json_with_overrides=json_with_overrides)
 
-        settings["skin_settings_for_import"] = IMPORTER_PROPERTIES.get_value("skin_settings_for_import", entity_reference=context, default_value="default")
         settings["eye_settings_for_import"] = IMPORTER_PROPERTIES.get_value("eye_settings_for_import", entity_reference=context, default_value="default")
 
         _LOG.dump("Settings to use", settings)
@@ -145,9 +145,7 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         mh_material = None
 
         if basic_type in ["Bodyproxy", "Basemesh"]:
-            # TODO(grind): F9ZLJW removed the enhanced skin; the importer builds a MakeSkin body for every
-            # skin_material_type until it builds the STYLIZED skin and drops the enhanced-settings options.
-            mh_material = MakeSkinMaterial()
+            mh_material = "stylized_skin"
 
         if basic_type in ["Bodypart", "Eyes", "Clothes"]:
             if "Eye" in basic_type:
@@ -161,16 +159,18 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
                 blender["materials"] = dict()
             blender["materials"][material_name] = blender_material
 
-            if basic_type == "Basemesh":
-                mh_material.populate_from_body_material_socket_call()
-            else:
-                if mh_material != "stylized_eyes":
-                    mh_material.populate_from_proxy_material_socket_call(proxy_info["uuid"])
-
-            if mh_material != "stylized_eyes":
-                mh_material.apply_node_tree(blender_material)
-            else:
+            if mh_material == "stylized_skin":
+                # STYLIZED_SPEC.md 7.1, built as HumanService.set_character_skin does; the MakeHuman skin is not read
+                NodeWrapperStylizedSkin.create_instance(blender_material.node_tree)
+                group_node = NodeService.find_first_node_by_type_name(blender_material.node_tree, "ShaderNodeGroup")
+                # 0.5 cm in scene units: scale factor 0.1 is metres, 1.0 decimetres, 10 centimetres
+                scale_factor = GeneralObjectProperties.get_value("scale_factor", entity_reference=blender_object)
+                NodeService.set_socket_default_values(group_node, {"SubsurfaceScale": SUBSURFACE_SCALE_METERS * scale_factor / 0.1})
+            elif mh_material == "stylized_eyes":
                 NodeWrapperStylizedEyes.create_instance(blender_material.node_tree)
+            else:
+                mh_material.populate_from_proxy_material_socket_call(proxy_info["uuid"])
+                mh_material.apply_node_tree(blender_material)
 
             diffuse_colors = MaterialService.get_diffuse_colors()
             if basic_type in diffuse_colors:
@@ -221,152 +221,6 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         mask.show_in_editmode = True
         mask.show_on_cage = True
         mask.invert_vertex_group = True
-
-    def _assign_material_instance(self, importer, blender_object, material, group_name):
-        _LOG.enter()
-        _LOG.debug("blender_object, material, group_name", (blender_object, material, group_name))
-
-        if not ObjectService.has_vertex_group(blender_object, group_name):
-            return
-
-        ObjectService.activate_blender_object(blender_object)
-        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-
-        blender_object.data.materials.append(material)
-        slot_number = blender_object.material_slots.find(material.name)
-        _LOG.dump("slot_number", slot_number)
-
-        bpy.context.active_object.active_material_index = slot_number
-
-        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.vertex_group_set_active(group=group_name)
-        bpy.ops.object.vertex_group_select()
-        bpy.ops.object.material_slot_assign()
-
-        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-
-    def _create_material_instances(self, importer):
-        _LOG.enter()
-        blender = importer["blender_entities"]
-        ui = importer["settings_from_ui"]
-        derived = importer["derived_settings"]
-
-        if not ui["extra_vertex_groups"]:
-            _LOG.debug("Skipping instances since we haven't created extra vertex groups")
-            return
-        if not ui["material_instances"]:
-            _LOG.debug("Skipping instances since it is disabled")
-            return
-        if ui["skin_material_type"] == "PLAIN":
-            _LOG.debug("Skipping instances since material type is PLAIN")
-            return
-
-        base_material = None
-
-        bodyproxy = None
-        if derived["has_body_proxy"] and "bodyproxy" in blender:
-            bodyproxy = blender["bodyproxy"]
-
-        basemesh = None
-        if "basemesh" in blender:
-            basemesh = blender["basemesh"]
-
-        if not bodyproxy and not basemesh:
-            _LOG.debug("Skipping instances since neither basemesh nor proxy is available")
-            return
-
-        if basemesh:
-            base_material = MaterialService.get_material(basemesh)
-        else:
-            if bodyproxy:
-                base_material = MaterialService.get_material(bodyproxy)
-
-        if not base_material:
-            _LOG.error("Skipping instances since no base material could be found. This should not have happened.")
-            return
-
-        for group_name in ["nipple", "lips", "fingernails", "toenails", "ears", "genitals"]:
-            _LOG.debug("About to create material instance for", group_name)
-            material_instance = base_material.copy()
-            material_instance.name = derived["prefix"] + group_name
-            if basemesh and ObjectService.has_vertex_group(basemesh, group_name):
-                self._assign_material_instance(importer, basemesh, material_instance, group_name)
-            if bodyproxy and ObjectService.has_vertex_group(bodyproxy, group_name):
-                self._assign_material_instance(importer, bodyproxy, material_instance, group_name)
-
-    def _adjust_skin_material_settings(self, importer):
-        _LOG.enter()
-        blender = importer["blender_entities"]
-        ui = importer["settings_from_ui"]
-        derived = importer["derived_settings"]
-
-        if ui["skin_material_type"] == "PLAIN":
-            _LOG.debug("Skipping enhanced material adjustment since material type is PLAIN")
-            return
-        matset = ui["skin_settings_for_import"]
-        if not matset or matset == "RAW":
-            _LOG.debug("Skipping enhanced material adjustment since they're not requested")
-            return
-
-        best_body_object = None
-
-        if "basemesh" in blender:
-            best_body_object = blender["basemesh"]
-        else:
-            if derived["has_body_proxy"] and "bodyproxy" in blender:
-                best_body_object = blender["bodyproxy"]
-
-        if not best_body_object:
-            _LOG.debug("Skipping enhanced material adjustment since there is no body")
-            return
-
-        if not MaterialService.has_materials(best_body_object):
-            _LOG.debug("Skipping enhanced material adjustment since the body does not have any material")
-            return
-
-        _LOG.debug("Chosen material settings", matset)
-        if matset == "CHARACTER":
-            available_from_list = UiService.get_importer_enhanced_settings_panel_list()
-            target = str(derived["name"]).lower()
-            for setting in available_from_list:
-                match = str(setting[0]).lower()
-                _LOG.debug("Comparison", (target, match))
-                if match == target:
-                    matset = setting[1]
-            if matset == "CHARACTER":
-                matset = "default"
-        _LOG.debug("Calculated material settings", matset)
-
-        file_name = LocationService.get_user_config("enhanced_settings." + matset + ".json")
-
-        if not os.path.exists(file_name):
-            _LOG.error("Settings did not exist despite being in list:", file_name)
-            return
-
-        settings = dict()
-        _LOG.debug("Will attempt to load", file_name)
-        with open(file_name, "r") as json_file:
-            settings = json.load(json_file)
-
-        _LOG.dump("Material settings to apply", settings)
-
-        for slot in best_body_object.material_slots:
-            material = slot.material
-            group_node = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeGroup")
-            if group_node:
-                values = NodeService.get_socket_default_values(group_node)
-                if "colorMixIn" in values:
-                    # This seems to be an enhanced skin material
-                    name = material.name
-                    if "." in name:
-                        (prefix, name) = name.split(".", 1)
-                    if "." in name:
-                        (name, number) = name.split(".", 1)
-                    _LOG.debug("final name", name)
-                    if name in settings:
-                        _LOG.debug("will try to apply settings", settings[name])
-                        NodeService.set_socket_default_values(group_node, settings[name])
 
     def _adjust_eye_material_settings(self, importer):
         _LOG.enter()
@@ -471,8 +325,6 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         if importer["settings_from_ui"]["feet_on_ground"] and importer["blender_entities"]["parent"]:
             importer["blender_entities"]["parent"].location[2] = abs(importer["derived_settings"]["lowest_point"])
 
-        self._create_material_instances(importer)
-        self._adjust_skin_material_settings(importer)
         self._adjust_eye_material_settings(importer)
 
         _LOG.time("Entire process took:")

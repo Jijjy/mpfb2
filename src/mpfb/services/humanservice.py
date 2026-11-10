@@ -972,11 +972,7 @@ class HumanService:
             ValueError: If a custom rig named in human_info is not present in user data.
             NotImplementedError: If human_info names a rigify rig but rigify is not enabled.
             IOError: If a built-in rig named in human_info has no definition file.
-
-        Note:
-            The two guards further down which would raise ValueError for a None or an empty human_info
-            both sit below a write to human_info, so neither can be reached. A None argument raises
-            TypeError at that write instead, and an empty dict is no longer empty when it is tested.
+            ValueError: If human_info is None or empty.
         """
 
         _LOG.debug("Deserialization settings", deserialization_settings)
