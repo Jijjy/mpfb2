@@ -31,19 +31,20 @@ OUT = os.path.join(HERE, "stylized-default.target.gz")
 PRESETS = {
     "default": dict(HEAD=1.03, CRANIUM=1.0, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
-                    NOSE=0.88, MOUTH=0.90, JAW=0.90, FACE_SIMPLIFY=1.0,
-                    EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.055, MOUTH_OUT=0.045,
-                    FACE_DETAIL=1.0, MOUTH_UP=0.015),
+                    NOSE=0.88, MOUTH_W=1.06, MOUTH_H=0.95, LIPS=0.75, JAW=0.90, FACE_SIMPLIFY=1.0,
+                    EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.055, MOUTH_OUT=0.025,
+                    FACE_DETAIL=1.0, MOUTH_UP=0.015, EYE_ROUND=(1.8, 1.4, 0.84, 0.93)),
     "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
-                   NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
+                   NOSE=1.0, MOUTH_W=1.0, MOUTH_H=1.0, LIPS=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
                    EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0,
-                   FACE_DETAIL=0.0, MOUTH_UP=0.0),
+                   FACE_DETAIL=0.0, MOUTH_UP=0.0, EYE_ROUND=(1.0, 1.0, 1.0, 1.0)),
 }
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
 # relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
 # SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed. Face: NOSE scales
-# the nose toward the cheek plane; MOUTH scales the mouth and lips; JAW narrows the lower face
+# the nose toward the cheek plane; MOUTH_W and MOUTH_H scale the mouth's width and height in the
+# face plane, LIPS the lips' depth in front of the philtrum/chin line; JAW narrows the lower face
 # toward a smaller chin; FACE_SIMPLIFY takes out the face's mid-scale relief (lid creases,
 # philtrum, lip volume, nasolabial folds, brow ridge) so features read from the texture.
 # EYE_FORWARD (dm) brings the eyes and lids toward the face's front plane; EAR_FILL is the share
@@ -53,7 +54,9 @@ PRESETS = {
 # ridges and bumps (cheekbone edge, lip corners, lid rims, nasolabial ridge) cut down after the
 # fill: the fill pass only raises, so the ridges between creases stayed. MOUTH_UP (dm) moves the
 # mouth up toward the nose: a shorter philtrum and a longer chin-to-lip span, as in anime and
-# Pixar faces. Both face passes are masked to the front of the face, so the skull keeps HM08's
+# Pixar faces. EYE_ROUND (upper lid, lower lid, inner and outer width) opens the eyes vertically and
+# narrows them, the inner corner most, so HM08's pointed almond reads rounder (PRXJX2: "the eyes need to be more
+# round"); the lids slide over the eyeball rather than off it. Both face passes are masked to the front of the face, so the skull keeps HM08's
 # shape (PRXJX2: "the overall size and shape of the head should be similar to the original").
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
@@ -247,9 +250,10 @@ def build(p0, faces, groups, weights, preset="default"):
     HEAD, CRANIUM, EYES, FLATTEN = s["HEAD"], s["CRANIUM"], s["EYES"], s["FLATTEN"]
     HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
-    NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
+    NOSE, JAW, FACE_SIMPLIFY = s["NOSE"], s["JAW"], s["FACE_SIMPLIFY"]
     NOSE_OUT, MOUTH_OUT, MOUTH_UP = s["NOSE_OUT"], s["MOUTH_OUT"], s["MOUTH_UP"]
     EYE_FORWARD, EAR_FILL, FACE_DETAIL = s["EYE_FORWARD"], s["EAR_FILL"], s["FACE_DETAIL"]
+    MOUTH_W, MOUTH_H, LIPS, EYE_ROUND = s["MOUTH_W"], s["MOUTH_H"], s["LIPS"], s["EYE_ROUND"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
     side = np.sign(p0[:, 0])
@@ -319,6 +323,21 @@ def build(p0, faces, groups, weights, preset="default"):
         r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
         r = np.linalg.norm(p - c, axis=1)
         p = scale_about(p, 1.0 - smoothstep(r_eye * 1.3, r_eye * 2.6, r), c, EYES / HEAD)
+        # Rounder openings: the lids' height about the eye centre stretches (upper lid more than
+        # the lower) and the width narrows, then each lid vertex goes back to its distance from
+        # the centre, so the lid edge stays on the eyeball instead of lifting off it.
+        if EYE_ROUND != (1.0, 1.0, 1.0, 1.0):
+            up, down, wide_in, wide_out = EYE_ROUND
+            c = jc(j)
+            r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
+            v = p - c
+            r = np.linalg.norm(v, axis=1)
+            k = np.where(v[:, 1] > 0.0, up, down)
+            wide = np.where(np.sign(v[:, 0]) == np.sign(c[0]), wide_out, wide_in)
+            v2 = v * np.stack([wide, k, np.ones(len(p))], 1)
+            v2 *= (r / np.maximum(np.linalg.norm(v2, axis=1), 1e-9))[:, None]
+            w = (1.0 - smoothstep(r_eye * 1.4, r_eye * 2.5, r)) * np.isin(np.arange(len(p)), body)
+            p = p + w[:, None] * (v2 - v)
         # Eyes sit closer to the face's front plane, so they stop reading as deep sockets.
         p[:, 2] += EYE_FORWARD * (1.0 - smoothstep(r_eye * 1.5, r_eye * 3.2, r))
 
@@ -372,21 +391,22 @@ def build(p0, faces, groups, weights, preset="default"):
         p[:, 0] -= (1.0 - NOSE) * t * p[:, 0]
         p[:, 1] -= (1.0 - NOSE) * t * (p[:, 1] - nose_mid)
 
-    # Mouth: narrower and shorter about the lip centre, in the face's own plane, and the lips'
-    # height above the philtrum/chin line scales by MOUTH^1.5 (flatter, simpler lips).
+    # Mouth: width and height about the lip centre scale by MOUTH_W and MOUTH_H in the face's own
+    # plane, and the lips' height above the philtrum/chin line by LIPS (flatter, simpler lips;
+    # PRXJX2: a -10% mouth with lips pushed 4.5 mm out read small and pouty).
     mouth = jc("joint-mouth")  # the jaw's hinge, level with the nose; not the lips
     hs = HEAD
     mid = front[(p[front, 1] < nose_tip[1] - 0.12 * hs) & (p[front, 1] > nose_tip[1] - 0.40 * hs)
                 & (w_face[front] > 0.9)]
     lip = p[mid[np.argmax(p[mid, 2])]]
-    if MOUTH != 1.0:
+    if (MOUTH_W, MOUTH_H, LIPS) != (1.0, 1.0, 1.0):
         base_z = lip[2] - 0.06 * hs
         w = w_face * (1.0 - smoothstep(0.30 * hs, 0.45 * hs, np.abs(p[:, 0]))) * \
             (1.0 - smoothstep(0.10 * hs, 0.18 * hs, np.abs(p[:, 1] - lip[1]))) * \
             smoothstep(base_z - 0.25 * hs, base_z, p[:, 2])
-        p[:, 0] -= (1.0 - MOUTH) * w * p[:, 0]
-        p[:, 1] -= (1.0 - MOUTH) * w * (p[:, 1] - lip[1])
-        p[:, 2] -= (1.0 - MOUTH ** 1.5) * w * np.maximum(p[:, 2] - base_z, 0.0)
+        p[:, 0] -= (1.0 - MOUTH_W) * w * p[:, 0]
+        p[:, 1] -= (1.0 - MOUTH_H) * w * (p[:, 1] - lip[1])
+        p[:, 2] -= (1.0 - LIPS) * w * np.maximum(p[:, 2] - base_z, 0.0)
 
     # Jaw: narrow the lower face toward a smaller chin, from the cheekbones down.
     if JAW != 1.0:

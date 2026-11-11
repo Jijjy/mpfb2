@@ -87,6 +87,19 @@ equivalents are in §7.
 Quad-only, built by hand over HM08 once HM08 has been posed into the stylized default shape
 (§6).
 
+Face layout (user, PRXJX2: the decimated previews' face topology "could be better"; automatic
+remeshing at 2,000 head tris does not give it: QuadriFlow loses the ears and the mouth, and
+un-subdividing HM08 keeps over 1,100 tris on the eyes and mouth):
+
+- Every eye and the mouth sit in their own closed rings of evenly sized quads; the eye rings are
+  round to match the rounder openings (§6.1), not HM08's almond.
+- No poles (vertices with other than 4 edges) on those rings; the 3- and 5-edge poles go to the
+  cheek, the temple and the corner of the jaw, where they do not show in deformation.
+- One loop runs from the nose wing round the mouth (nasolabial); the nose bridge carries 2
+  loops across, the nose tip 1.
+- Quads on the face are about the same size as on the cranium, no denser strip round the
+  features.
+
 Triangle budget at LOD0 (counted with each quad as 2 triangles):
 
 | Region | Tris | Notes |
@@ -233,9 +246,9 @@ on top. Scales are relative to the HM08 default adult:
 | Feature | Change |
 |---|---|
 | Head | uniform +3%, cranium shape unchanged: overall size and shape close to HM08 (user, PRXJX2); the stylization comes from the features. Face smoothing stays on the front of the face, so the skull is not reshaped |
-| Eyes (sockets and lids) | +22% (D6), with lid loops shaped for the larger eyeball; brought 2.5 mm forward toward the face plane |
+| Eyes (sockets and lids) | +22% (D6), with lid loops shaped for the larger eyeball; brought 2.5 mm forward toward the face plane; openings rounder (user, PRXJX2): lids open up ×1.8 above and ×1.4 below the eye centre, the opening narrows ×0.84 on the inner side and ×0.93 on the outer, lids kept on the eyeball |
 | Nose and ears | nose −12% toward the cheek plane, brought 5.5 mm forward down to the nostril base; nostril flare flattened by about 80%; ear concha and folds filled up to the rim (helix kept) |
-| Mouth | −10% (lips −15% in depth); lips brought 4.5 mm forward, more than the philtrum and chin, so they keep a step in profile; moved 1.5 mm up toward the nose (shorter philtrum) |
+| Mouth | +6% wider, −5% in height, lips −25% in depth (user, PRXJX2: −10% read small and pouty); lips brought 2.5 mm forward, more than the philtrum and chin, so they keep a step in profile; moved 1.5 mm up toward the nose (shorter philtrum) |
 | Jaw | lower face 10% narrower toward a smaller chin |
 | Face relief | broad low-pass over the head: lid creases, philtrum, lip volume, nasolabial folds and brow ridge removed; eyes, brows and lips read from the texture |
 | Hands | +12% |
