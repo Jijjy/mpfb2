@@ -143,7 +143,7 @@ already in the tree (`composites/`, `abstractgroupwrapper.py`).
 Port from `master` rather than writing again: `nodewrapperstylizedskin.py`,
 `nodewrapperstylizedeyes.py`, their tests, and the eye presets (`git log master --
 src/mpfb/entities/nodemodel/v2/materials`). Check the ported code against this tree's
-`MaterialService` and `NodeService`, and drop anything that deletes realistic code.
+`MaterialService` and `NodeService`, and drop anything that deletes realistic code. Master's `materialservice.py` diff removes 596 lines, so port by hand, not by cherry-pick.
 
 ### 5.1 `STYLIZED` skin
 
@@ -152,7 +152,7 @@ One Principled BSDF, exportable to glTF/FBX. Group inputs:
 | Input | Default | Notes |
 |---|---|---|
 | `SkinTone` | sRGB (0.80, 0.60, 0.48) | Plus 12 swatches in `data/settings/skin_tones.json`. |
-| `BloodMap` | `data/textures/sty_bloodmap.png` (1024²) | Painted mask of warm areas: cheeks, nose tip, ears, lips, knuckles, elbows, knees, palms, soles. Painted in HM08's existing UV layout. |
+| `BloodMap` | `data/textures/sty_bloodmap.png` (1024²) | Painted mask of warm areas: cheeks, nose tip, ears, lips, knuckles, elbows, knees, palms, soles. Painted fresh in HM08's existing UV layout (master's `sty01_bloodmap.png` is for sty01 UVs and cannot be reused). |
 | `BloodTint` | (0.85, 0.35, 0.30), strength 0.25 | Mixed into `SkinTone` through `BloodMap`. Replaces SSS for the warm look. |
 | `CavityMap` | AO baked from the HM08 base mesh | Multiplied in at 0.4, tinted toward `BloodTint`, so folds read warm and not grey. |
 | `Gradient` | −12% head to feet | Object-space gradient, keeps attention on the face. |
@@ -229,7 +229,7 @@ The existing harness is kept (`test/execute_tests_headless.bash`).
 
 | Test | Asserts |
 |---|---|
-| `ccc_data/targets_test.py` | `stylized-default` indices are all below 19,159; every `target.json` entry has a file and the reverse. |
+| `ccc_data/targets_test.py` (new file) | `stylized-default` indices are all below 19,159; every `target.json` entry has a file and the reverse. |
 | `bbb_services/humanservice_test.py` | New human at defaults has stylization 1.0 and head/height 0.135–0.15; with it at 0 vertex positions equal the plain add-on's (1e-6); an `.mhm` without the key loads at 0. |
 | `bbb_services/humanservice_test.py` (age) | Weight fades 1 → 0.5 → 0 across young, child, baby. |
 | `ddd_entities/nodemodel/v2/*` | One test per new wrapper (skin, eyes), as for the existing ones. |
