@@ -25,18 +25,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "..", "src", "mpfb", "data")
 OUT = os.path.join(HERE, "stylized-default.target.gz")
 
-# §6.1 scales, relative to the HM08 default.
-HEAD = 1.08
-CRANIUM = 1.04       # on top of HEAD, above the brow
-EYES = 1.12
-FLATTEN = 0.40       # nostril flare and ear interior relief
-HANDS = 1.12
-FEET = 1.10
-NECK = 1.10          # thickness, X and Z
-SHOULDERS = 1.06     # width at the shoulder joints
-WAIST = 0.96
-LOWER_LEG = 1.03
-SIMPLIFY = 0.85      # share of the body's fine relief (muscle, folds, creases) removed
+# §6.1 scales, relative to the HM08 default. "bold" is a preview only, roughly twice the §6.1
+# changes (about 6.3 heads, near the §6.2 chunky end), for the user to judge the strength against.
+PRESETS = {
+    "default": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
+                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85),
+    "bold": dict(HEAD=1.18, CRANIUM=1.07, EYES=1.30, FLATTEN=0.70, HANDS=1.25, FEET=1.22,
+                 NECK=1.18, SHOULDERS=1.12, WAIST=0.92, LOWER_LEG=1.00, SIMPLIFY=0.95),
+}
+# HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare and ear
+# interior relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
+# SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed.
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 
 LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
@@ -152,7 +151,11 @@ def scale_about(p, w, pivot, s):
     return p + w[:, None] * (np.asarray(s) - 1.0) * (p - pivot)
 
 
-def build(p0, faces, groups, weights):
+def build(p0, faces, groups, weights, preset="default"):
+    s = PRESETS[preset]
+    HEAD, CRANIUM, EYES, FLATTEN = s["HEAD"], s["CRANIUM"], s["EYES"], s["FLATTEN"]
+    HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
+    WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
     side = np.sign(p0[:, 0])
@@ -172,14 +175,14 @@ def build(p0, faces, groups, weights):
     p[:, 1] -= (LOWER_LEG - 1.0) * np.clip(knee_y - p0[:, 1], 0.0, knee_y - ankle_y)
 
     # Feet +10% about the ankle column at sole height, so soles stay flat.
-    for s, j in (("L", "joint-l-ankle"), ("R", "joint-r-ankle")):
+    for sd, j in (("L", "joint-l-ankle"), ("R", "joint-r-ankle")):
         a = jc(j)
         pivot = np.array([a[0], p[body, 1].min(), a[2]])
-        p = scale_about(p, w_foot[s], pivot, FEET)
+        p = scale_about(p, w_foot[sd], pivot, FEET)
 
     # Hands +12% about the wrist joint.
-    for s, j in (("L", "joint-l-hand"), ("R", "joint-r-hand")):
-        p = scale_about(p, w_hand[s], jc(j), HANDS)
+    for sd, j in (("L", "joint-l-hand"), ("R", "joint-r-hand")):
+        p = scale_about(p, w_hand[sd], jc(j), HANDS)
 
     # Waist -4%: X/Z squeeze of the torso, peaking at the narrowest torso height.
     torso = body[(np.abs(p0[body, 0]) < 1.6) & (p0[body, 1] > 1.0) & (p0[body, 1] < 4.0)
@@ -228,9 +231,9 @@ def build(p0, faces, groups, weights):
     w_flat = (1.0 - smoothstep(0.14, 0.26, np.linalg.norm(p - nostrils, axis=1))) * \
         smoothstep(nostrils[1] - 0.16, nostrils[1] - 0.06, p[:, 1])  # stop above the upper lip
     head_band = body[(np.abs(p0[body, 1] - eye_y) < 0.4) & (w_face[body] > 0.9)]
-    for s in (1.0, -1.0):
-        cand = head_band[side[head_band] == s]
-        ear = p[cand[np.argmax(np.abs(p[cand, 0]))]] - np.array([s * 0.1, 0.0, 0.0])
+    for sd in (1.0, -1.0):
+        cand = head_band[side[head_band] == sd]
+        ear = p[cand[np.argmax(np.abs(p[cand, 0]))]] - np.array([sd * 0.1, 0.0, 0.0])
         w_flat = np.maximum(w_flat, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
@@ -265,7 +268,9 @@ def main():
     p0 = default_adult(raw)
     groups, weights = load_groups(), load_weights(len(p0))
     p = build(p0, faces, groups, weights)
-    for label, q in (("hm08 raw", raw), ("hm08 default adult", p0), ("stylized-default", p)):
+    bold = build(p0, faces, groups, weights, "bold")
+    for label, q in (("hm08 raw", raw), ("hm08 default adult", p0), ("stylized-default", p),
+                     ("bold preview", bold)):
         r, h, t = measure(q, groups, weights)
         print(f"{label}: head {h:.3f} dm, height {t:.3f} dm, head/height {r:.4f} "
               f"({1 / r:.2f} heads)")
