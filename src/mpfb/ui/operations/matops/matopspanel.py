@@ -26,6 +26,8 @@ class MPFB_PT_MatopsPanel(Abstract_Panel):
         layout = self.layout
         scene = context.scene
 
+        self.create_box(layout, "Look development").operator("mpfb.stylized_studio")
+
         if context.active_object is None:
             return
 
