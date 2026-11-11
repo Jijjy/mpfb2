@@ -26,6 +26,9 @@ from ..types import DeserializationSettings, HumanInfo
 
 _LOG = LogService.get_logger("services.humanservice")
 
+STYLIZATION_TARGET = "stylized-default"
+"""The stylization slider's target (data/targets/stylization). A new human gets it at 1.0, see create_human."""
+
 _EXISTING_PRESETS: list[str] | None = None
 """The cached names of the stored character presets, or None until the first scan."""
 
@@ -1168,7 +1171,10 @@ class HumanService:
             human_info["skin_material_type"] = deserialization_settings["override_skin_model"]
 
         macro_detail_dict = human_info["phenotype"]
-        basemesh = HumanService.create_human(mask_helpers, detailed_helpers, extra_vertex_groups, feet_on_ground, scale, macro_detail_dict)
+        # A preset or .mhm states its own targets: one without a stylization entry loads at 0, so it is
+        # not changed, and one with it gets the value through _load_targets below.
+        basemesh = HumanService.create_human(mask_helpers, detailed_helpers, extra_vertex_groups, feet_on_ground, scale,
+                                             macro_detail_dict, stylization=0.0)
         if "name" in human_info and human_info["name"]:
             basemesh.name = human_info["name"] + ".body"
 
@@ -1556,7 +1562,8 @@ class HumanService:
 
     @staticmethod
     def create_human(mask_helpers: bool = True, detailed_helpers: bool = True, extra_vertex_groups: bool = True,
-                     feet_on_ground: bool = True, scale: float = 0.1, macro_detail_dict: MacroInfo | None = None) -> bpy.types.Object:
+                     feet_on_ground: bool = True, scale: float = 0.1, macro_detail_dict: MacroInfo | None = None,
+                     stylization: float = 1.0) -> bpy.types.Object:
         """
         Creates a human mesh with specified settings and properties.
 
@@ -1567,6 +1574,8 @@ class HumanService:
             feet_on_ground (bool): Whether to position the feet on the ground. Default is True.
             scale (float): The scale factor for the basemesh. Default is 0.1.
             macro_detail_dict (MacroInfo | None): A dictionary containing macro detail settings. If None, default settings are used.
+            stylization (float): Weight of the stylized-default target, 0 to 1. Default is 1.0. At 0 the target is
+                not loaded at all, so the mesh is the plain one.
 
         Returns:
             bpy.types.Object: The created human basemesh object.
@@ -1605,6 +1614,9 @@ class HumanService:
             HumanObjectProperties.set_value(name, macro_detail_dict["race"][key], entity_reference=basemesh)
 
         TargetService.reapply_macro_details(basemesh)
+
+        if stylization > 0.0:
+            TargetService.bulk_load_targets(basemesh, [{"target": STYLIZATION_TARGET, "value": stylization}])
 
         if mask_helpers:
             mask = typing.cast(bpy.types.MaskModifier, basemesh.modifiers.new("Hide helpers", 'MASK'))

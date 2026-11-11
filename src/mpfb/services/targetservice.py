@@ -162,6 +162,11 @@ class TargetService:
             return False
         if shapekey_name.startswith("$md"):
             return True
+        # The stylization section's targets (stylized-default, data/targets/stylization) are one-sided and
+        # carry no opposite suffix. Every new human has one, so it must not depend on _ODD_TARGET_NAMES,
+        # which bulk_load_targets does not fill and a reloaded blend file starts without.
+        if shapekey_name.startswith("stylized-"):
+            return True
         for opposite in _OPPOSITES:
             if opposite in shapekey_name:
                 return True

@@ -132,7 +132,8 @@ class MPFB_OT_CreateHumanOperator(MpfbOperator):
                 extra_vertex_groups=ctx.extra_vertex_groups,
                 feet_on_ground=True,
                 scale=scale,
-                macro_detail_dict=macro_details)
+                macro_detail_dict=macro_details,
+                stylization=ctx.phenotype_stylization)
             self.report({'INFO'}, "Human created. You can adjust the phenotype values on the modeling panel.")
         else:
             basemesh = HumanService.create_human(
@@ -140,7 +141,8 @@ class MPFB_OT_CreateHumanOperator(MpfbOperator):
                 detailed_helpers=ctx.detailed_helpers,
                 extra_vertex_groups=ctx.extra_vertex_groups,
                 feet_on_ground=True,
-                scale=scale)
+                scale=scale,
+                stylization=ctx.phenotype_stylization)
             self.report({'INFO'}, "Human created.")
 
         _LOG.debug("Basemesh", basemesh)

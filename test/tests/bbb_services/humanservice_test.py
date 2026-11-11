@@ -251,6 +251,101 @@ def test_deserialize_from_mhm():
     ObjectService.delete_object(basemesh)
 
 
+def _mixed_coordinates(basemesh):
+    """Vertex positions with every relative shape key mixed in, for all vertices (helpers included)"""
+    import numpy
+    keys = basemesh.data.shape_keys
+    count = len(basemesh.data.vertices)
+    basis = numpy.empty(count * 3, dtype=numpy.float64)
+    if keys is None:
+        basemesh.data.vertices.foreach_get("co", basis)
+        return basis.reshape(-1, 3)
+    keys.key_blocks[0].data.foreach_get("co", basis)
+    mixed = basis.copy()
+    block = numpy.empty(count * 3, dtype=numpy.float64)
+    for key_block in keys.key_blocks[1:]:
+        if key_block.value != 0.0:
+            key_block.data.foreach_get("co", block)
+            mixed += key_block.value * (block - basis)
+    return mixed.reshape(-1, 3)
+
+
+def _head_to_height(basemesh):
+    """Crown to chin over crown to sole, measured on the body as tools/hm08/make_stylized_default.py measure() does"""
+    import numpy, re
+    limb = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
+                      r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
+    scale = basemesh.MPFB_GEN_scale_factor
+    blender = _mixed_coordinates(basemesh) / scale
+    # Back to the obj frame in decimeters: x across, y up, z forward
+    p = numpy.stack([blender[:, 0], blender[:, 2], -blender[:, 1]], axis=1)
+    groups_file = os.path.join(LocationService.get_mpfb_data("mesh_metadata"), "basemesh_vertex_groups.json")
+    with open(groups_file, "r") as json_file:
+        groups = {k: numpy.concatenate([numpy.arange(a, b + 1) for a, b in v]) for k, v in json.load(json_file).items()}
+    weights_file = os.path.join(LocationService.get_mpfb_data("rigs"), "standard", "weights.default.json")
+    with open(weights_file, "r") as json_file:
+        raw = json.load(json_file)["weights"]
+    w_face = numpy.zeros(len(p))
+    for bone, pairs in raw.items():
+        if not limb.match(bone):
+            for index, value in pairs:
+                w_face[index] += value
+    w_face = numpy.clip(w_face, 0.0, 1.0)
+    body = groups["body"]
+    b = p[body]
+    crown, sole = b[:, 1].max(), b[:, 1].min()
+    neck_z = p[groups["joint-neck"]].mean(0)[2]
+    chin_set = (numpy.abs(b[:, 0]) < 0.05) & (w_face[body] > 0.5) & (b[:, 2] > neck_z + 0.6)
+    chin = b[chin_set, 1].min()
+    return (crown - chin) / (crown - sole)
+
+
+def test_create_human_stylization_default():
+    """HumanService.create_human() -- a new human gets stylized-default at 1.0, 0.135-0.15 of its height a head"""
+    basemesh = HumanService.create_human()
+    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
+    ratio = _head_to_height(basemesh)
+    assert 0.135 <= ratio <= 0.15, "head/height " + str(ratio)
+    ObjectService.delete_object(basemesh)
+
+
+def test_create_human_stylization_zero_is_plain():
+    """HumanService.create_human() -- stylization 0 gives the plain add-on's vertex positions (1e-6)"""
+    import numpy
+    plain = HumanService.create_human(stylization=0.0)
+    assert not TargetService.has_target(plain, "stylized-default")
+    plain_co = _mixed_coordinates(plain)
+    ObjectService.delete_object(plain)
+
+    # A stylized human with its stylization turned back off is the plain human, but for where
+    # feet_on_ground put it: create_human found the lowest point with the target on, so only a
+    # vertical offset may remain.
+    stylized = HumanService.create_human()
+    TargetService.set_target_value(stylized, "stylized-default", 0.0)
+    stylized_co = _mixed_coordinates(stylized)
+    ObjectService.delete_object(stylized)
+
+    difference = stylized_co - plain_co
+    assert numpy.abs(difference[:, 0:2]).max() < 1e-6
+    vertical = difference[:, 2]
+    assert vertical.max() - vertical.min() < 1e-6
+
+
+def test_deserialize_from_mhm_without_stylization_loads_at_zero():
+    """HumanService.deserialize_from_mhm() -- an .mhm without the stylization key is not stylized"""
+    deser = HumanService.get_default_deserialization_settings()
+    deser["clothes_deep_search"] = False
+    deser["bodypart_deep_search"] = False
+    deser["load_clothes"] = False
+    mhm_file = os.path.join(LocationService.get_mpfb_test("testdata"), "testchar.mhm")
+    with open(mhm_file, "r") as mhm:
+        assert "stylized-default" not in mhm.read()
+    basemesh = HumanService.deserialize_from_mhm(mhm_file, deser)
+    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(0.0)
+    assert not TargetService.has_target(basemesh, "stylized-default")
+    ObjectService.delete_object(basemesh)
+
+
 def test_serialize_to_json_string():
     """HumanService.serialize_to_json_string()"""
     obj = HumanService.create_human()
