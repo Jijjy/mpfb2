@@ -32,11 +32,13 @@ PRESETS = {
     "default": dict(HEAD=1.08, CRANIUM=0.97, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
                     NOSE=0.80, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0,
-                    EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.04, MOUTH_OUT=0.03),
+                    EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.055, MOUTH_OUT=0.045,
+                    FACE_DETAIL=1.0),
     "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
                    NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
-                   EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0),
+                   EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0,
+                   FACE_DETAIL=0.0),
 }
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
 # relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
@@ -47,9 +49,12 @@ PRESETS = {
 # EYE_FORWARD (dm) brings the eyes and lids toward the face's front plane; EAR_FILL is the share
 # of the ear's concha and folds filled up toward the rim. NOSE_OUT and MOUTH_OUT (dm) bring the
 # nose and the mouth with its surround forward as whole forms, so the smaller features still
-# stand out of the face instead of reading flat.
+# stand out of the face instead of reading flat. FACE_DETAIL is the share of the face's small
+# ridges and bumps (cheekbone edge, lip corners, lid rims, nasolabial ridge) cut down after the
+# fill: the fill pass only raises, so the ridges between creases stayed.
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
+DETAIL_T = 2.0e4  # lowpass4 strength: forms a few edges across go, ~30 edges across stay
 
 LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
                   r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
@@ -159,6 +164,40 @@ def taubin_smooth(p, faces, verts, passes, lam=0.5, mu=-0.53):
     return q
 
 
+def lowpass4(p, faces, verts, t):
+    """Least-squares low-pass over `verts`: q minimises |q - p|^2 + t |M^2 q|^2, M the graph
+    Laplacian over 4. Its response 1 / (1 + t k^4) is flat at low frequency, so broad forms keep
+    their place and size (no shrinking, unlike Laplacian smoothing), and falls steeply, so
+    mid-scale relief goes in one solve where Taubin would need thousands of passes. Open-boundary
+    vertices (eye and mouth openings) and everything outside `verts` are held."""
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spl
+    n = len(p)
+    keep = np.zeros(n, bool)
+    keep[verts] = True
+    edges, uses = set(), {}
+    for f in faces:
+        for a, b in zip(f, f[1:] + f[:1]):
+            k = (min(a, b), max(a, b))
+            edges.add(k)
+            if keep[f].all():
+                uses[k] = uses.get(k, 0) + 1
+    e = np.array(sorted(edges))
+    boundary = np.zeros(n, bool)
+    boundary[np.array([k for k, c in uses.items() if c == 1]).ravel()] = True
+    adj = sp.coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])),
+                        shape=(n, n)).tocsr()
+    m = (sp.diags(np.asarray(adj.sum(1)).ravel()) - adj) / 4.0
+    m4 = (m @ m) @ (m @ m)
+    free = np.nonzero(keep & ~boundary)[0]
+    held = np.nonzero(~(keep & ~boundary))[0]
+    a = (sp.identity(len(free)) + t * m4[free][:, free]).tocsc()
+    rhs = p[free] - t * (m4[free][:, held] @ p[held])
+    q = p.copy()
+    q[free] = np.column_stack([spl.spsolve(a, rhs[:, i]) for i in range(3)])
+    return q
+
+
 def fill_height(h, faces, verts, iterations):
     """Fill-only relaxation of the scalar field `h` over `verts`: each step raises a vertex to its
     neighbours' mean where that is higher, so pits fill up to the level of what rings them and
@@ -207,7 +246,7 @@ def build(p0, faces, groups, weights, preset="default"):
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
     NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
     NOSE_OUT, MOUTH_OUT = s["NOSE_OUT"], s["MOUTH_OUT"]
-    EYE_FORWARD, EAR_FILL = s["EYE_FORWARD"], s["EAR_FILL"]
+    EYE_FORWARD, EAR_FILL, FACE_DETAIL = s["EYE_FORWARD"], s["EAR_FILL"], s["FACE_DETAIL"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
     side = np.sign(p0[:, 0])
@@ -346,8 +385,9 @@ def build(p0, faces, groups, weights, preset="default"):
     # Each moves as a whole, with a smooth falloff about a centre set behind the feature, so the
     # nostrils, philtrum and lip corners come along and no edge or crease forms; the cheeks, eyes
     # and chin stay put. The mouth's falloff takes the teeth and tongue helpers with it.
-    for out_dm, c, r0, r1 in ((NOSE_OUT, nose_tip + np.array([0.0, 0.08, -0.12]) * hs, 0.10, 0.26),
-                              (MOUTH_OUT, lip + np.array([0.0, -0.06, -0.15]) * hs, 0.16, 0.32)):
+    nose_c = nose_tip + np.array([0.0, 0.08, -0.12]) * hs
+    lip_c = lip + np.array([0.0, -0.06, -0.15]) * hs
+    for out_dm, c, r0, r1 in ((NOSE_OUT, nose_c, 0.10, 0.26), (MOUTH_OUT, lip_c, 0.16, 0.32)):
         if out_dm:
             d = np.linalg.norm(p - c, axis=1)
             p[:, 2] += out_dm * w_face * (1.0 - smoothstep(r0 * hs, r1 * hs, d))
@@ -363,6 +403,20 @@ def build(p0, faces, groups, weights, preset="default"):
         n = vertex_normals(p, faces)
         out = np.maximum(((taubin_smooth(p, faces, head, FACE_PASSES) - p) * n).sum(1), 0.0)
         p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face) * out)[:, None] * n
+
+    # Face detail cut (PRXJX2: "still some mesh detail we should lose from the face"): a two-sided
+    # 4th-order low-pass along the normal takes out the mid-scale relief the fill left (cheekbone
+    # edge, under-eye bags, temple and brow ridges). Its flat low-frequency response keeps the
+    # broad face where it is (no dishing); the eye and mouth openings are held as boundaries, the
+    # nose and lips are masked out so they keep their shape and push, ears go to the ear fill.
+    if FACE_DETAIL:
+        head = body[w_face[body] > 0.05]
+        n = vertex_normals(p, faces)
+        dn = ((lowpass4(p, faces, head, DETAIL_T) - p) * n).sum(1)
+        keep = np.maximum(1.0 - smoothstep(0.12 * hs, 0.20 * hs, np.linalg.norm(p - nose_c, axis=1)),
+                          1.0 - smoothstep(0.17 * hs, 0.24 * hs, np.linalg.norm(p - lip_c, axis=1)))
+        w_det = FACE_DETAIL * smoothstep(0.3, 0.9, w_face) * (1.0 - w_ear) * (1.0 - keep)
+        p = p + (w_det * dn)[:, None] * n
 
     # Ears: the concha and antihelix fill up toward the rim, so the ear reads as one simple shell
     # instead of a rim around a hole. Height above the head's side, along each ear's outward
