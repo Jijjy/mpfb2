@@ -5,6 +5,7 @@ from .....services import UiService
 from .....services import ObjectService
 from .....services import NodeService
 from .....services import MaterialService
+from ..eyesettingspanel import EYE_SETTINGS_MARKER_KEYS
 import json
 
 _LOG = LogService.get_logger("eyesettings._save_material")
@@ -31,11 +32,11 @@ def _save_material(self, context, file_name):
     group_node = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeGroup")
     if group_node:
         material_settings = NodeService.get_socket_default_values(group_node)
-        if "IrisMinorColor" not in material_settings:
-            self.report({'ERROR'}, "Eyes do not seem to have procedural eyes material")
+        if not any(key in material_settings for key in EYE_SETTINGS_MARKER_KEYS):
+            self.report({'ERROR'}, "Eyes do not seem to have procedural or stylized eyes material")
             return {'FINISHED'}
     else:
-        self.report({'ERROR'}, "Eyes do not seem to have procedural eyes material")
+        self.report({'ERROR'}, "Eyes do not seem to have procedural or stylized eyes material")
         return {'FINISHED'}
 
     _LOG.dump("material_settings", material_settings)

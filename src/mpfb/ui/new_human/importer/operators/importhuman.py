@@ -435,11 +435,13 @@ class MPFB_OT_ImportHumanOperator(MpfbOperator):
         if group_node:
             values = NodeService.get_socket_default_values(group_node)
             _LOG.dump("Current socket values", values)
-            if "IrisMajorColor" in values:
+            if "IrisMajorColor" in values and "IrisMajorColor" in settings:
+                # The check on the settings skips a stylized eyes preset, whose PupilSize and
+                # PupilColor would otherwise land on the procedural group's inputs of those names
                 _LOG.debug("will try to apply settings", settings)
                 NodeService.set_socket_default_values(group_node, settings)
             else:
-                _LOG.info("Skipping eye material adjustment since material does not seem to be procedural")
+                _LOG.info("Skipping eye material adjustment since material or settings do not seem to be procedural")
             material.blend_method = "BLEND"
             material.show_transparent_back = True
 

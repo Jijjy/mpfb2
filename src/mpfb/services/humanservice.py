@@ -240,7 +240,10 @@ class HumanService:
         group_node = NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, eyes_material.node_tree), "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" not in material_settings:
+            if "IrisInner" in material_settings:
+                human_info["eyes_material_type"] = "STYLIZED_EYES"
+                human_info["eyes_material_settings"] = material_settings
+            elif "IrisMinorColor" not in material_settings:
                 # Material exists, but does not seem procedural. Assume it is a MAKESKIN material
                 human_info["eyes_material_type"] = "MAKESKIN"
             else:
@@ -641,6 +644,15 @@ class HumanService:
             blender_material.show_transparent_back = True
             blender_material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
 
+        if material_type == "STYLIZED_EYES":
+            # One opaque Principled BSDF, no transmission shell, no alpha blend (STYLIZED_SPEC.md 5.2)
+            from ..entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
+            MaterialService.delete_all_materials(clothes)
+            _LOG.debug("Setting up stylized eyes")
+            blender_material = MaterialService.create_empty_material(name, clothes)
+            NodeWrapperStylizedEyes.create_instance(typing.cast(bpy.types.NodeTree, blender_material.node_tree))
+            blender_material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
+
         ClothesService.fit_clothes_to_human(clothes, basemesh, mhclo)
         mhclo.set_scalings(bpy.context, basemesh)
 
@@ -984,9 +996,11 @@ class HumanService:
             _LOG.debug("Eyes material type not specified")
             return
 
-        if human_info["eyes_material_type"] != "PROCEDURAL_EYES":
-            _LOG.debug("Eyes material is not procedural")
+        marker_keys = {"PROCEDURAL_EYES": "IrisMinorColor", "STYLIZED_EYES": "IrisInner"}
+        if human_info["eyes_material_type"] not in marker_keys:
+            _LOG.debug("Eyes material is neither procedural nor stylized")
             return
+        marker_key = marker_keys[human_info["eyes_material_type"]]
 
         if not "eyes_material_settings" in human_info or not human_info["eyes_material_settings"]:
             _LOG.debug("There are no eye material overrides, going with the default")
@@ -1006,13 +1020,13 @@ class HumanService:
         group_node = NodeService.find_first_node_by_type_name(typing.cast(bpy.types.NodeTree, material.node_tree), "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" in material_settings:
+            if marker_key in material_settings:
                 _LOG.dump("will try to apply settings", settings)
                 NodeService.set_socket_default_values(group_node, settings)
             else:
-                _LOG.warn("Material group node did not have expected key -> not procedural eyes")
+                _LOG.warn("Material group node did not have expected key", marker_key)
         else:
-            _LOG.warn("Material had no group node -> not procedural eyes")
+            _LOG.warn("Material had no group node -> neither procedural nor stylized eyes")
 
     @staticmethod
     def _load_targets(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:

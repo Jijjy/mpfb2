@@ -1,0 +1,46 @@
+{
+    "CatchlightColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+    ],
+    "CatchlightSize": 0.28,
+    "CatchlightStrength": 1.5,
+    "Coat": 0.5,
+    "IrisInner": [
+        0.3,
+        0.55,
+        0.8,
+        1.0
+    ],
+    "IrisOuter": [
+        0.08,
+        0.2,
+        0.45,
+        1.0
+    ],
+    "IrisSize": 0.39,
+    "LimbalRingColor": [
+        0.02,
+        0.025,
+        0.04,
+        1.0
+    ],
+    "LimbalRingWidth": 0.15,
+    "PupilColor": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "PupilSize": 0.35,
+    "Roughness": 0.05,
+    "ScleraColor": [
+        0.92,
+        0.9,
+        0.88,
+        1.0
+    ],
+    "ScleraEdgeDarkening": 0.25
+}

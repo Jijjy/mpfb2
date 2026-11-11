@@ -13,8 +13,8 @@ from ..entities.nodemodel.v2.composites import NodeWrapperMpfbAlphaMixer
 
 _LOG = LogService.get_logger("services.materialservice")
 
-MaterialType = typing.Literal["empty", "enhanced_skin", "procedural_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]
-"""The seven answers ``identify_material()`` can give.
+MaterialType = typing.Literal["empty", "enhanced_skin", "procedural_eyes", "stylized_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]
+"""The eight answers ``identify_material()`` can give.
 
 A literal rather than a bare ``str``, so that the type tests the rest of the module performs against
 the result are checked against the same set of values the identifier can actually return."""
@@ -124,6 +124,8 @@ class MaterialService():
                     return "enhanced_skin"
                 if "IrisSection4Color" in node_info["values"]:
                     return "procedural_eyes"
+                if "IrisInner" in node_info["values"]:
+                    return "stylized_eyes"
                 if "NavelCenterOverride" in node_info["values"]:
                     return "layered_skin"
 

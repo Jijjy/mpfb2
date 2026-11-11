@@ -327,7 +327,7 @@ def _apply_random_eyes(report, eyes_cfg, basemesh, rng, subdiv_levels):
 
     material_type = eyes_cfg.get("material_type", "MAKESKIN")
     alternative_materials = None
-    if eyes_cfg.get("randomize_alt_materials", True) and material_type != "PROCEDURAL_EYES":
+    if eyes_cfg.get("randomize_alt_materials", True) and material_type not in ("PROCEDURAL_EYES", "STYLIZED_EYES"):
         alternative_materials = _pick_alternative_material(report, path, "eyes", rng)
 
     HumanService.add_mhclo_asset(path, basemesh, asset_type="eyes", subdiv_levels=subdiv_levels,

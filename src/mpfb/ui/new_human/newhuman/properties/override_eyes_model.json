@@ -9,6 +9,7 @@
         ["PRESET", "From preset", "Use the material model specified in the preset", 2],
         ["GAMEENGINE", "GameEngine (PBR)", "Use a simplistic PBR-style material for the eyes, without any procedural aspects at all. This is geared towards export to external applications", 3],
         ["MAKESKIN", "MakeSkin (PBR)", "Use texture-based material for the eyes, without any particular procedural aspects. This is the material which is closest to the original MakeHuman materials", 4],
-        ["PROCEDURAL_EYES", "Procedural", "Use a fully procedural material for the eyes. This allows controlling many aspects but might be unsuitable for animation", 5]
+        ["PROCEDURAL_EYES", "Procedural", "Use a fully procedural material for the eyes. This allows controlling many aspects but might be unsuitable for animation", 5],
+        ["STYLIZED_EYES", "Stylized", "Use the stylized painted eye material: opaque, with colors and sizes set by the eye settings", 6]
     ]
 }

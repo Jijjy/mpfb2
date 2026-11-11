@@ -5,7 +5,7 @@ from .....services import LocationService
 from .....services import ObjectService
 from .....services import NodeService
 from .....services import MaterialService
-from ...eyesettings.eyesettingspanel import EYE_SETTINGS_PROPERTIES
+from ...eyesettings.eyesettingspanel import EYE_SETTINGS_PROPERTIES, EYE_SETTINGS_MARKER_KEYS
 from ..... import ClassManager
 from ....mpfboperator import MpfbOperator
 from ....mpfbcontext import MpfbContext
@@ -66,14 +66,22 @@ class MPFB_OT_ApplyEyeSettingsOperator(MpfbOperator):
         group_node = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeGroup")
         if group_node:
             material_settings = NodeService.get_socket_default_values(group_node)
-            if "IrisMinorColor" in material_settings:
-                _LOG.debug("will try to apply settings", settings)
-                NodeService.set_socket_default_values(group_node, settings)
-            else:
-                self.report({'ERROR'}, "Eyes do not seem to have procedural eyes material")
+            # Procedural and stylized eyes have different key sets that share PupilSize and
+            # PupilColor, so a preset is applied only to the kind of material it was saved from
+            marker_key = None
+            for key in EYE_SETTINGS_MARKER_KEYS:
+                if key in material_settings:
+                    marker_key = key
+            if marker_key is None:
+                self.report({'ERROR'}, "Eyes do not seem to have procedural or stylized eyes material")
                 return {'FINISHED'}
+            if marker_key not in settings:
+                self.report({'ERROR'}, "The selected presets are for the other kind of eyes material (procedural vs stylized)")
+                return {'FINISHED'}
+            _LOG.debug("will try to apply settings", settings)
+            NodeService.set_socket_default_values(group_node, settings)
         else:
-            self.report({'ERROR'}, "Eyes do not seem to have procedural eyes material")
+            self.report({'ERROR'}, "Eyes do not seem to have procedural or stylized eyes material")
             return {'FINISHED'}
 
         self.report({'INFO'}, "Settings were loaded from " + file_name)

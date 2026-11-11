@@ -15,6 +15,12 @@ _LOC = os.path.dirname(__file__)
 EYE_SETTINGS_PROPERTIES_DIR = os.path.join(_LOC, "properties")
 EYE_SETTINGS_PROPERTIES = SceneConfigSet.from_definitions_in_json_directory(EYE_SETTINGS_PROPERTIES_DIR, prefix="EYE_")
 
+# Group input keys that tell the two eye material key sets apart: procedural eyes, stylized eyes
+EYE_SETTINGS_MARKER_KEYS = ("IrisMinorColor", "IrisInner")
+
+# Presets shipped in data/settings and copied to the user config dir when missing there
+SHIPPED_EYE_SETTINGS = ("default", "stylized")
+
 def _populate_settings(self, context):
     _LOG.enter()
     _LOG.trace("Context is scene", isinstance(context, bpy.types.Scene))
@@ -82,15 +88,24 @@ def ensure_eye_settings_default_exists():
     """Check that the json file with the default eye settings exists in the user config dir.
     If not, copy it from the data directory."""
     _LOG.enter()
-    default_json = LocationService.get_user_config("eye_settings.default.json")
-    if not os.path.exists(default_json):
-        _LOG.warn("The default eye settings do not exist. Will create at", default_json)
-        template_settings = LocationService.get_mpfb_data("settings")
-        default_json_template = os.path.join(template_settings, "eye_settings.default.json")
-        if os.path.exists(default_json_template):
-            _LOG.warn("Copying from", default_json_template)
-            shutil.copy(default_json_template, default_json)
-    else:
-        _LOG.trace("Default eye settings exist")
+    rebuild = False
+    for name in SHIPPED_EYE_SETTINGS:
+        file_name = "eye_settings." + name + ".json"
+        user_json = LocationService.get_user_config(file_name)
+        if not os.path.exists(user_json):
+            _LOG.warn("The " + name + " eye settings do not exist. Will create at", user_json)
+            template_json = os.path.join(LocationService.get_mpfb_data("settings"), file_name)
+            if os.path.exists(template_json):
+                _LOG.warn("Copying from", template_json)
+                shutil.copy(template_json, user_json)
+                rebuild = name != "default"
+        else:
+            _LOG.trace("Eye settings exist", name)
+    if rebuild:
+        # A list built before the copy would not offer the new preset
+        if UiService.get_eye_settings_panel_list() is not None:
+            UiService.rebuild_eye_settings_panel_list()
+        if UiService.get_importer_eye_settings_panel_list() is not None:
+            UiService.rebuild_importer_eye_settings_panel_list()
 
 ClassManager.add_class(MPFB_PT_Eye_Settings_Panel)
