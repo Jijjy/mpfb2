@@ -32,11 +32,11 @@ PRESETS = {
     "default": dict(HEAD=1.08, CRANIUM=0.97, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
                     NOSE=0.80, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0,
-                    EYE_FORWARD=0.025, EAR_FILL=1.0),
+                    EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.04, MOUTH_OUT=0.03),
     "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
                    NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
-                   EYE_FORWARD=0.0, EAR_FILL=0.0),
+                   EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0),
 }
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
 # relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
@@ -45,7 +45,9 @@ PRESETS = {
 # toward a smaller chin; FACE_SIMPLIFY takes out the face's mid-scale relief (lid creases,
 # philtrum, lip volume, nasolabial folds, brow ridge) so features read from the texture.
 # EYE_FORWARD (dm) brings the eyes and lids toward the face's front plane; EAR_FILL is the share
-# of the ear's concha and folds filled up toward the rim.
+# of the ear's concha and folds filled up toward the rim. NOSE_OUT and MOUTH_OUT (dm) bring the
+# nose and the mouth with its surround forward as whole forms, so the smaller features still
+# stand out of the face instead of reading flat.
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
 
@@ -204,6 +206,7 @@ def build(p0, faces, groups, weights, preset="default"):
     HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
     NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
+    NOSE_OUT, MOUTH_OUT = s["NOSE_OUT"], s["MOUTH_OUT"]
     EYE_FORWARD, EAR_FILL = s["EYE_FORWARD"], s["EAR_FILL"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
@@ -320,11 +323,11 @@ def build(p0, faces, groups, weights, preset="default"):
     # Mouth: narrower and shorter about the lip centre, in the face's own plane, and the lips'
     # height above the philtrum/chin line scales by MOUTH^1.5 (flatter, simpler lips).
     mouth = jc("joint-mouth")  # the jaw's hinge, level with the nose; not the lips
+    hs = HEAD
+    mid = front[(p[front, 1] < nose_tip[1] - 0.12 * hs) & (p[front, 1] > nose_tip[1] - 0.40 * hs)
+                & (w_face[front] > 0.9)]
+    lip = p[mid[np.argmax(p[mid, 2])]]
     if MOUTH != 1.0:
-        hs = HEAD
-        mid = front[(p[front, 1] < nose_tip[1] - 0.12 * hs) & (p[front, 1] > nose_tip[1] - 0.40 * hs)
-                    & (w_face[front] > 0.9)]
-        lip = p[mid[np.argmax(p[mid, 2])]]
         base_z = lip[2] - 0.06 * hs
         w = w_face * (1.0 - smoothstep(0.30 * hs, 0.45 * hs, np.abs(p[:, 0]))) * \
             (1.0 - smoothstep(0.10 * hs, 0.18 * hs, np.abs(p[:, 1] - lip[1]))) * \
@@ -338,6 +341,16 @@ def build(p0, faces, groups, weights, preset="default"):
         w_jaw = w_face * (1.0 - smoothstep(mouth[1] - 0.05, nose_tip[1] + 0.05, p[:, 1]))
         w_jaw *= smoothstep(jc("joint-jaw")[2] - 0.3, jc("joint-jaw")[2] + 0.4, p[:, 2])
         p = scale_about(p, w_jaw, np.array([0.0, mouth[1], 0.0]), [JAW, 1.0, 1.0])
+
+    # Nose and mouth forward (PRXJX2: "face is too flat, pull nose and mouth slightly outward").
+    # Each moves as a whole, with a smooth falloff about a centre set behind the feature, so the
+    # nostrils, philtrum and lip corners come along and no edge or crease forms; the cheeks, eyes
+    # and chin stay put. The mouth's falloff takes the teeth and tongue helpers with it.
+    for out_dm, c, r0, r1 in ((NOSE_OUT, nose_tip + np.array([0.0, 0.08, -0.12]) * hs, 0.10, 0.26),
+                              (MOUTH_OUT, lip + np.array([0.0, -0.06, -0.15]) * hs, 0.16, 0.32)):
+        if out_dm:
+            d = np.linalg.norm(p - c, axis=1)
+            p[:, 2] += out_dm * w_face * (1.0 - smoothstep(r0 * hs, r1 * hs, d))
 
     # Face simplify: a broad low-pass over the head, so creases (lids, philtrum, nasolabial
     # folds) fill in and the eyes, brows and lips come from the texture. Only the outward part of
