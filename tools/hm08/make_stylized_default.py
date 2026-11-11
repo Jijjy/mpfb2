@@ -25,18 +25,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "..", "src", "mpfb", "data")
 OUT = os.path.join(HERE, "stylized-default.target.gz")
 
-# §6.1 scales, relative to the HM08 default. "bold" is a preview only, roughly twice the §6.1
-# changes (about 6.3 heads, near the §6.2 chunky end), for the user to judge the strength against.
+# §6.1 scales, relative to the HM08 default. "default" is the anime-leaning look the user chose on
+# PRXJX2 (much more stylized, facial detail left to textures). "subtle" is the first §6.1 table,
+# kept only so the renders can show how far the default moved.
 PRESETS = {
-    "default": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
-                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85),
-    "bold": dict(HEAD=1.18, CRANIUM=1.07, EYES=1.30, FLATTEN=0.70, HANDS=1.25, FEET=1.22,
-                 NECK=1.18, SHOULDERS=1.12, WAIST=0.92, LOWER_LEG=1.00, SIMPLIFY=0.95),
+    "default": dict(HEAD=1.08, CRANIUM=1.045, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
+                    NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
+                    NOSE=0.70, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0),
+    "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
+                   NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
+                   NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0),
 }
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare and ear
 # interior relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
-# SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed.
+# SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed. Face: NOSE scales
+# the nose toward the cheek plane; MOUTH scales the mouth and lips; JAW narrows the lower face
+# toward a smaller chin; FACE_SIMPLIFY takes out the face's mid-scale relief (lid creases,
+# philtrum, lip volume, nasolabial folds, brow ridge) so features read from the texture.
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
+FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
 
 LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
                   r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
@@ -156,6 +163,7 @@ def build(p0, faces, groups, weights, preset="default"):
     HEAD, CRANIUM, EYES, FLATTEN = s["HEAD"], s["CRANIUM"], s["EYES"], s["FLATTEN"]
     HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
+    NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
     side = np.sign(p0[:, 0])
@@ -238,6 +246,35 @@ def build(p0, faces, groups, weights, preset="default"):
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
 
+    # Nose: scale toward a pivot behind it at cheek depth, so it shrinks and sits flatter.
+    if NOSE != 1.0:
+        nose_c = nose_tip + np.array([0.0, 0.12, -0.18])
+        w_nose = (1.0 - smoothstep(0.22, 0.42, np.linalg.norm(p - nose_c, axis=1))) * w_face
+        p = scale_about(p, w_nose, nose_tip + np.array([0.0, 0.05, -0.45]), NOSE)
+
+    # Mouth: smaller and flatter lips, about the mouth joint pulled back into the head.
+    mouth = jc("joint-mouth")
+    if MOUTH != 1.0:
+        lip_front = p[front[np.abs(p[front, 1] - mouth[1]) < 0.1], 2].max()
+        mc = np.array([0.0, mouth[1], lip_front])
+        w_mouth = (1.0 - smoothstep(0.18, 0.40, np.linalg.norm((p - mc) * [1.0, 1.4, 1.0], axis=1)))
+        w_mouth *= w_face
+        p = scale_about(p, w_mouth, mc - np.array([0.0, 0.0, 0.25]), [MOUTH, MOUTH, MOUTH ** 1.5])
+
+    # Jaw: narrow the lower face toward a smaller chin, from the cheekbones down.
+    if JAW != 1.0:
+        w_jaw = w_face * (1.0 - smoothstep(mouth[1] - 0.05, nose_tip[1] + 0.05, p[:, 1]))
+        w_jaw *= smoothstep(jc("joint-jaw")[2] - 0.3, jc("joint-jaw")[2] + 0.4, p[:, 2])
+        p = scale_about(p, w_jaw, np.array([0.0, mouth[1], 0.0]), [JAW, 1.0, 1.0])
+
+    # Face simplify: a broad low-pass over the head, so the features are soft swells and the
+    # eyes, brows and lips come from the texture. The eye and mouth openings stay put (open
+    # boundaries); the falloff fades out down the neck.
+    if FACE_SIMPLIFY:
+        head = body[w_face[body] > 0.05]
+        p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face))[:, None] * \
+            (taubin_smooth(p, faces, head, FACE_PASSES) - p)
+
     # Simplify: take out most of the fine relief over the whole body (muscle definition, skin
     # folds, lip and lid creases) so the forms read as broad shapes (spec R1, R4). Helpers and
     # joint cubes are left alone.
@@ -268,9 +305,9 @@ def main():
     p0 = default_adult(raw)
     groups, weights = load_groups(), load_weights(len(p0))
     p = build(p0, faces, groups, weights)
-    bold = build(p0, faces, groups, weights, "bold")
+    subtle = build(p0, faces, groups, weights, "subtle")
     for label, q in (("hm08 raw", raw), ("hm08 default adult", p0), ("stylized-default", p),
-                     ("bold preview", bold)):
+                     ("subtle (first 6.1)", subtle)):
         r, h, t = measure(q, groups, weights)
         print(f"{label}: head {h:.3f} dm, height {t:.3f} dm, head/height {r:.4f} "
               f"({1 / r:.2f} heads)")
