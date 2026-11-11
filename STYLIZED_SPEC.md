@@ -232,9 +232,9 @@ on top. Scales are relative to the HM08 default adult:
 
 | Feature | Change |
 |---|---|
-| Head | uniform +8%; cranium +4.5% more on top of that, so the face is relatively smaller |
-| Eyes (sockets and lids) | +22% (D6), with lid loops shaped for the larger eyeball |
-| Nose and ears | nose −30% toward the cheek plane; nostril flare and ear interior flattened by about 80% |
+| Head | uniform +8%; cranium +4.5% more on top of that (grown up and back from the forehead), so the face is relatively smaller |
+| Eyes (sockets and lids) | +22% (D6), with lid loops shaped for the larger eyeball; brought 2.5 mm forward toward the face plane |
+| Nose and ears | nose −20% toward the cheek plane; nostril flare flattened by about 80%; ear concha and folds filled up to the rim (helix kept) |
 | Mouth | −18% (lips flattened further, −26% in depth) |
 | Jaw | lower face 10% narrower toward a smaller chin |
 | Face relief | broad low-pass over the head: lid creases, philtrum, lip volume, nasolabial folds and brow ridge removed; eyes, brows and lips read from the texture |

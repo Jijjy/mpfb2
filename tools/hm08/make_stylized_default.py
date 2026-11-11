@@ -31,17 +31,21 @@ OUT = os.path.join(HERE, "stylized-default.target.gz")
 PRESETS = {
     "default": dict(HEAD=1.08, CRANIUM=1.045, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
-                    NOSE=0.70, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0),
+                    NOSE=0.80, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0,
+                    EYE_FORWARD=0.025, EAR_FILL=1.0),
     "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
-                   NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0),
+                   NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
+                   EYE_FORWARD=0.0, EAR_FILL=0.0),
 }
-# HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare and ear
-# interior relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
+# HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
+# relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
 # SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed. Face: NOSE scales
 # the nose toward the cheek plane; MOUTH scales the mouth and lips; JAW narrows the lower face
 # toward a smaller chin; FACE_SIMPLIFY takes out the face's mid-scale relief (lid creases,
 # philtrum, lip volume, nasolabial folds, brow ridge) so features read from the texture.
+# EYE_FORWARD (dm) brings the eyes and lids toward the face's front plane; EAR_FILL is the share
+# of the ear's concha and folds filled up toward the rim.
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
 
@@ -153,6 +157,31 @@ def taubin_smooth(p, faces, verts, passes, lam=0.5, mu=-0.53):
     return q
 
 
+def fill_height(h, faces, verts, iterations):
+    """Fill-only relaxation of the scalar field `h` over `verts`: each step raises a vertex to its
+    neighbours' mean where that is higher, so pits fill up to the level of what rings them and
+    nothing is lowered. Vertices with a neighbour outside `verts` are held."""
+    import scipy.sparse as sp
+    keep = np.zeros(len(h), bool)
+    keep[verts] = True
+    e = set()
+    for f in faces:
+        for a, b in zip(f, f[1:] + f[:1]):
+            e.add((min(a, b), max(a, b)))
+    e = np.array(sorted(e))
+    n = len(h)
+    adj = sp.coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])),
+                        shape=(n, n)).tocsr()
+    deg = np.asarray(adj.sum(1)).ravel()
+    inside = np.asarray(adj @ keep.astype(float)).ravel()
+    move = keep & (inside == deg) & (deg > 0)
+    avg = sp.diags(1.0 / np.maximum(deg, 1)) @ adj
+    q = h.copy()
+    for _ in range(iterations):
+        q[move] = np.maximum(q, avg @ q)[move]
+    return q
+
+
 def vertex_normals(p, faces):
     """Area-weighted outward vertex normals (HM08 faces wind counter-clockwise from outside)."""
     n = np.zeros_like(p)
@@ -175,6 +204,7 @@ def build(p0, faces, groups, weights, preset="default"):
     HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
     NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
+    EYE_FORWARD, EAR_FILL = s["EYE_FORWARD"], s["EAR_FILL"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
     side = np.sign(p0[:, 0])
@@ -227,11 +257,13 @@ def build(p0, faces, groups, weights, preset="default"):
     p = scale_about(p, w_face, neck_top, HEAD)
 
     # Cranium +4% more: about the eye line, weighted from the brow up, so the face is smaller
-    # relative to the skull.
+    # relative to the skull. The pivot sits on the forehead's front, so the skull grows up and
+    # back: a pivot at the head's centre pushed the forehead forward of the nose and lips and
+    # dished the profile (PRXJX2: "still a little concave").
     eye_y = jc("joint-l-eye")[1]
-    head_c = p[w_face > 0.9].mean(0)
+    front_head = body[(np.abs(p[body, 0]) < 0.1) & (np.abs(p[body, 1] - eye_y - 0.4) < 0.1)]
     w_cran = w_face * smoothstep(eye_y - 0.1, eye_y + 0.6, p[:, 1])
-    p = scale_about(p, w_cran, np.array([0.0, eye_y, head_c[2]]), CRANIUM)
+    p = scale_about(p, w_cran, np.array([0.0, eye_y, p[front_head, 2].max()]), CRANIUM)
 
     # Eye sockets and lids +12% about each eyeball centre; the eyeball helpers ride along (D6).
     # +12% is against the default adult, so the head's +8% is divided out here.
@@ -240,8 +272,12 @@ def build(p0, faces, groups, weights, preset="default"):
         r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
         r = np.linalg.norm(p - c, axis=1)
         p = scale_about(p, 1.0 - smoothstep(r_eye * 1.3, r_eye * 2.6, r), c, EYES / HEAD)
+        # Eyes sit closer to the face's front plane, so they stop reading as deep sockets.
+        p[:, 2] += EYE_FORWARD * (1.0 - smoothstep(r_eye * 1.5, r_eye * 3.2, r))
 
-    # Nostril flare and ear interior: remove 40% of the relief left after smoothing.
+    # Nostril flare: remove FLATTEN of the relief left after smoothing. Ears are kept out: a
+    # Laplacian flatten collapses the thin helix rim and leaves the concha as a hole (PRXJX2:
+    # "ears look like mere holes"); the face fill below simplifies them instead.
     nb = neighbours(len(p), faces)
     smooth = laplacian_smooth(p, nb, 8)
     front = body[np.abs(p0[body, 0]) < 0.4]
@@ -250,10 +286,11 @@ def build(p0, faces, groups, weights, preset="default"):
     w_flat = (1.0 - smoothstep(0.14, 0.26, np.linalg.norm(p - nostrils, axis=1))) * \
         smoothstep(nostrils[1] - 0.16, nostrils[1] - 0.06, p[:, 1])  # stop above the upper lip
     head_band = body[(np.abs(p0[body, 1] - eye_y) < 0.4) & (w_face[body] > 0.9)]
+    w_ear = np.zeros(len(p))
     for sd in (1.0, -1.0):
         cand = head_band[side[head_band] == sd]
         ear = p[cand[np.argmax(np.abs(p[cand, 0]))]] - np.array([sd * 0.1, 0.0, 0.0])
-        w_flat = np.maximum(w_flat, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
+        w_ear = np.maximum(w_ear, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
 
@@ -314,10 +351,25 @@ def build(p0, faces, groups, weights, preset="default"):
         out = np.maximum(((taubin_smooth(p, faces, head, FACE_PASSES) - p) * n).sum(1), 0.0)
         p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face) * out)[:, None] * n
 
+    # Ears: the concha and antihelix fill up toward the rim, so the ear reads as one simple shell
+    # instead of a rim around a hole. Height above the head's side, along each ear's outward
+    # axis, is raised to the mean of its neighbours wherever that is higher (a fill-only
+    # relaxation of the height field), with the rim and the ear's root held.
+    if EAR_FILL:
+        n = vertex_normals(p, faces)
+        for sd in (1.0, -1.0):
+            axis = np.array([sd, 0.0, -0.3]) / np.hypot(1.0, 0.3)
+            ear_v = body[(w_ear[body] > 0.3) & (side[body] == sd) & ((n[body] @ axis) > 0.0)]
+            h = p @ axis
+            filled = fill_height(h, faces, ear_v, 300)
+            p = p + (EAR_FILL * w_ear * (filled - h))[:, None] * axis
+
+
     # Simplify: take out most of the fine relief over the whole body (muscle definition, skin
     # folds, lip and lid creases) so the forms read as broad shapes (spec R1, R4). Helpers and
     # joint cubes are left alone.
-    p = p + SIMPLIFY * (taubin_smooth(p, faces, body, SIMPLIFY_PASSES) - p)
+    # Ears keep their rim (the face fill already took out the inner folds).
+    p = p + (SIMPLIFY * (1.0 - w_ear))[:, None] * (taubin_smooth(p, faces, body, SIMPLIFY_PASSES) - p)
 
     # Keep the soles on the ground plane.
     p[:, 1] += p0[body, 1].min() - p[body, 1].min()

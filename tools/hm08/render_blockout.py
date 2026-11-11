@@ -4,7 +4,7 @@
 
 Writes, each with both figures labelled:
 - front.png, three_quarter.png, side.png: full body
-- face_front.png, face_three_quarter.png: head close-ups
+- face_front.png, face_three_quarter.png, face_side.png: head close-ups
 - strength_front.png, strength_face.png: OG, the "subtle" preset (the first §6.1 table) and
   stylized-default side by side, to show how far the anime-leaning default moved
 - density_face.png, density_torso.png: wireframe of OG HM08 at its own density next to the
@@ -137,6 +137,7 @@ SHOTS = [
     ("side", pair, 12.0, 90.0, 0.3, 35.0, 9.0, 0.6, 0),
     ("face_front", pair, 3.4, 0.0, 7.8, 6.0, 9.15, 0.2, 0),
     ("face_three_quarter", pair, 3.4, 35.0, 7.8, 6.0, 9.15, 0.2, 0),
+    ("face_side", pair, 3.0, 90.0, 7.8, 7.0, 9.15, 0.2, 0),
     ("strength_front", trio, 9.0, 20.0, 0.3, 35.0, 9.5, 0.55, 0),
     ("strength_face", trio, 3.0, 25.0, 8.0, 9.5, 9.6, 0.2, 0),
     ("density_face", dens, 3.4, 20.0, 7.8, 6.0, 9.05, 0.15, 0.006),
