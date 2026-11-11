@@ -674,7 +674,7 @@ NodeService.add_link(node_tree, diffuse_tex, principled, "Color", "Base Color")
 ### Serializing and Recreating Node Trees
 
 This only works for a material whose node tree is flat. A tree holding a `ShaderNodeGroup` — which every MPFB
-enhanced-skin or layered-skin material does — raises `AttributeError` out of `get_node_tree_as_dict()`; see that
+stylized skin material does — raises `AttributeError` out of `get_node_tree_as_dict()`; see that
 method's entry above.
 
 ```python
