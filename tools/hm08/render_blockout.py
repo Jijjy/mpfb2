@@ -9,7 +9,9 @@ Writes, each with both figures labelled:
   stylized-default side by side, to show how far the anime-leaning default moved
 - density_face.png, density_torso.png: wireframe of OG HM08 at its own density, the stylized
   shape decimated to the old D2 budget (18k body tris, head and neck 4.5k) and to the current one
-  (10k, head and neck 2k; lowered on PRXJX2). Head and rest are decimated separately to their
+  (10k, head and neck 2k; lowered on PRXJX2), with the eyes and mouth decimated hardest. Labels
+  give head triangles and, of those, the eye and mouth regions'. Head and rest are decimated
+  separately to their
   §4.1 region budgets. The decimated mesh is only a preview of the density sty01 (§4) will have;
   sty01 itself is hand-built quads.
 Workbench engine, no addon needed.
@@ -19,6 +21,7 @@ import os
 import sys
 
 import bpy
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import make_stylized_default as msd  # noqa: E402
@@ -117,14 +120,56 @@ rest_faces = [f for f in body_faces if p0[f, 1].min() <= neck_y]
 og_head_tris = sum(len(f) - 2 for f in head_faces)
 
 
-def budget_mesh(name, budget):
-    """p1 with the head and the rest decimated apart to their budgets, joined into one mesh."""
-    verts, polys, tris = [], [], []
+# Eyes and mouth: where HM08 is densest (lid and lip loops). The current budget decimates them
+# hardest (PRXJX2: "fewer vertices, especially around the eyes and mouth"); weight 1 in the
+# Decimate vertex group makes an edge cheap to collapse, weight 0 multiplies its cost.
+eye_c = [p1[groups[j]].mean(0) for j in ("joint-l-eye", "joint-r-eye")]
+_mid = [i for i in groups["body"] if abs(p1[i, 0]) < 0.05
+        and eye_c[0][1] - 1.15 < p1[i, 1] < eye_c[0][1] - 0.75]
+lip_c = p1[max(_mid, key=lambda i: p1[i, 2])] - [0.0, 0.0, 0.1]
+dist = np.minimum.reduce([np.linalg.norm(p1 - c, axis=1) / r
+                          for c, r in ((eye_c[0], 0.35), (eye_c[1], 0.35), (lip_c, 0.40))])
+FEATURE_BASE = 0.95  # vertex weight off the features: their edges cost x1.1, enough for eyes and
+# mouth to go from 718 tris (plain decimation) to about 300 of the head's 2,000
+w_features = np.clip(1.5 - dist, 0.0, 1.0)  # 1 inside, fading to 0 at 1.5x the radius
+
+
+def feature_tris(obj):
+    """Triangles with their centre in the eye or mouth regions."""
+    tris = 0
+    for poly in obj.data.polygons:
+        c = np.array(poly.center)
+        c = np.array([c[0], c[2], -c[1]])  # back to base.obj axes
+        d = min(np.linalg.norm(c - e) / r for e, r in ((eye_c[0], 0.35), (eye_c[1], 0.35),
+                                                       (lip_c, 0.40)))
+        tris += (len(poly.vertices) - 2) * (d < 1.0)
+    return tris
+
+
+og_feat = sum(len(f) - 2 for f in head_faces
+              if min(np.linalg.norm(p1[f].mean(0) - e) / r for e, r in
+                     ((eye_c[0], 0.35), (eye_c[1], 0.35), (lip_c, 0.40))) < 1.0)
+print(f"og: eye+mouth tris {og_feat} of head {og_head_tris}")
+
+
+def budget_mesh(name, budget, features_first=False):
+    """p1 with the head and the rest decimated apart to their budgets, joined into one mesh.
+    features_first decimates the eye and mouth regions harder than the rest of the head."""
+    verts, polys, tris, feat = [], [], [], 0
     for part, faces_, target in (("head", head_faces, budget[1]),
                                  ("rest", rest_faces, budget[0] - budget[1])):
         obj = add_mesh(f"{name}_{part}", p1, TAN, faces_, eyes=False)
         ratio = target / sum(len(f) - 2 for f in faces_)
-        apply_modifier(obj, "DECIMATE", ratio=ratio, use_symmetry=True, symmetry_axis="X")
+        kw = {}
+        if features_first and part == "head":
+            vg = obj.vertex_groups.new(name="features")
+            for i, wt in enumerate(w_features):
+                vg.add([i], float(FEATURE_BASE + (1.0 - FEATURE_BASE) * wt), "REPLACE")
+            kw = dict(vertex_group="features", vertex_group_factor=1.0)
+        apply_modifier(obj, "DECIMATE", ratio=ratio, use_symmetry=True, symmetry_axis="X", **kw)
+        if part == "head":
+            feat = feature_tris(obj)
+            print(f"{name}: eye+mouth tris {feat} of head {tri_count(obj)}")
         base = len(verts)
         verts += [tuple(v.co) for v in obj.data.vertices]
         polys += [[base + i for i in poly.vertices] for poly in obj.data.polygons]
@@ -134,11 +179,11 @@ def budget_mesh(name, budget):
     obj.data.clear_geometry()
     obj.data.from_pydata(verts, [], polys)
     obj.data.shade_smooth()
-    return obj, sum(tris), tris[0]
+    return obj, sum(tris), tris[0], feat
 
 
-low_old, old_tris, old_head = budget_mesh("stylized_budget_old", OLD_BUDGET)
-low, low_tris, low_head = budget_mesh("stylized_budget", BUDGET)
+low_old, old_tris, old_head, old_feat = budget_mesh("stylized_budget_old", OLD_BUDGET)
+low, low_tris, low_head, low_feat = budget_mesh("stylized_budget", BUDGET, features_first=True)
 
 scene.render.engine = "BLENDER_WORKBENCH"
 shading = scene.display.shading
@@ -156,8 +201,9 @@ scene.camera = cam
 
 # (file, [(figure, label)], spacing, yaw, camera z, ortho, label z, label size, wire thickness)
 og_l, new_l, subtle_l = "OG: HM08 default adult", "NEW: stylized-default", "first 6.1 (subtle)"
-dens_f = [(og, f"OG: HM08, head {og_head_tris:,} tris"), (low_old, f"old budget: head {old_head:,}"),
-          (low, f"NEW budget: head {low_head:,}")]
+dens_f = [(og, f"OG: head {og_head_tris:,}, eyes+mouth {og_feat:,}"),
+          (low_old, f"old: head {old_head:,}, eyes+mouth {old_feat:,}"),
+          (low, f"NEW: head {low_head:,}, eyes+mouth {low_feat:,}")]
 dens_t = [(og, f"OG: HM08, {og_tris:,} tris"), (low_old, f"old budget: {old_tris:,}"),
           (low, f"NEW budget: {low_tris:,}")]
 pair = [(og, og_l), (new, new_l)]

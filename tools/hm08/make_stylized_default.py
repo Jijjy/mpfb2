@@ -29,16 +29,16 @@ OUT = os.path.join(HERE, "stylized-default.target.gz")
 # PRXJX2 (much more stylized, facial detail left to textures). "subtle" is the first §6.1 table,
 # kept only so the renders can show how far the default moved.
 PRESETS = {
-    "default": dict(HEAD=1.08, CRANIUM=0.97, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
+    "default": dict(HEAD=1.03, CRANIUM=1.0, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
-                    NOSE=0.80, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0,
+                    NOSE=0.88, MOUTH=0.90, JAW=0.90, FACE_SIMPLIFY=1.0,
                     EYE_FORWARD=0.025, EAR_FILL=1.0, NOSE_OUT=0.055, MOUTH_OUT=0.045,
-                    FACE_DETAIL=1.0),
+                    FACE_DETAIL=1.0, MOUTH_UP=0.015),
     "subtle": dict(HEAD=1.08, CRANIUM=1.04, EYES=1.12, FLATTEN=0.40, HANDS=1.12, FEET=1.10,
                    NECK=1.10, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.85,
                    NOSE=1.0, MOUTH=1.0, JAW=1.0, FACE_SIMPLIFY=0.0,
                    EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0,
-                   FACE_DETAIL=0.0),
+                   FACE_DETAIL=0.0, MOUTH_UP=0.0),
 }
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
 # relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
@@ -51,7 +51,10 @@ PRESETS = {
 # nose and the mouth with its surround forward as whole forms, so the smaller features still
 # stand out of the face instead of reading flat. FACE_DETAIL is the share of the face's small
 # ridges and bumps (cheekbone edge, lip corners, lid rims, nasolabial ridge) cut down after the
-# fill: the fill pass only raises, so the ridges between creases stayed.
+# fill: the fill pass only raises, so the ridges between creases stayed. MOUTH_UP (dm) moves the
+# mouth up toward the nose: a shorter philtrum and a longer chin-to-lip span, as in anime and
+# Pixar faces. Both face passes are masked to the front of the face, so the skull keeps HM08's
+# shape (PRXJX2: "the overall size and shape of the head should be similar to the original").
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
 DETAIL_T = 2.0e4  # lowpass4 strength: forms a few edges across go, ~30 edges across stay
@@ -245,7 +248,7 @@ def build(p0, faces, groups, weights, preset="default"):
     HANDS, FEET, NECK, SHOULDERS = s["HANDS"], s["FEET"], s["NECK"], s["SHOULDERS"]
     WAIST, LOWER_LEG, SIMPLIFY = s["WAIST"], s["LOWER_LEG"], s["SIMPLIFY"]
     NOSE, MOUTH, JAW, FACE_SIMPLIFY = s["NOSE"], s["MOUTH"], s["JAW"], s["FACE_SIMPLIFY"]
-    NOSE_OUT, MOUTH_OUT = s["NOSE_OUT"], s["MOUTH_OUT"]
+    NOSE_OUT, MOUTH_OUT, MOUTH_UP = s["NOSE_OUT"], s["MOUTH_OUT"], s["MOUTH_UP"]
     EYE_FORWARD, EAR_FILL, FACE_DETAIL = s["EYE_FORWARD"], s["EAR_FILL"], s["FACE_DETAIL"]
     p = p0.copy()
     jc = lambda name: p[groups[name]].mean(0)
@@ -294,13 +297,15 @@ def build(p0, faces, groups, weights, preset="default"):
     w_neck_core = smoothstep(0.1, 0.5, w_neck) * (1.0 - w_face)
     p = scale_about(p, w_neck_core, np.array([0.0, 0.0, neck_c[2]]), [NECK, 1.0, NECK])
 
-    # Head +8% about the top of the neck.
+    # Head +3% about the top of the neck: close to HM08's own size and shape (PRXJX2: "the overall
+    # size and shape of the head should be similar to the original"; +8% with a reshaped cranium
+    # gave an odd head). The features below carry the stylization.
     neck_top = jc("joint-neck") * 0.5 + jc("joint-head") * 0.5
     p = scale_about(p, w_face, neck_top, HEAD)
 
-    # Cranium -3% against the +8% head: weighted from the brow up, so the crown comes down and the
-    # forehead is shorter (PRXJX2: "forehead too large", the growing cranium read as alien). The
-    # pivot sits on the forehead's front, so the forehead stays put and only the crown and the
+    # Cranium against the head scale (1.0 in the default, so the skull keeps HM08's shape; the
+    # subtle preset grows it): weighted from the brow up; below 1 the crown comes down and the
+    # forehead is shorter. The pivot sits on the forehead's front, so the forehead stays put and only the crown and the
     # back of the skull move: a pivot at the head's centre dished the profile.
     eye_y = jc("joint-l-eye")[1]
     front_head = body[(np.abs(p[body, 0]) < 0.1) & (np.abs(p[body, 1] - eye_y - 0.4) < 0.1)]
@@ -308,7 +313,7 @@ def build(p0, faces, groups, weights, preset="default"):
     p = scale_about(p, w_cran, np.array([0.0, eye_y, p[front_head, 2].max()]), CRANIUM)
 
     # Eye sockets and lids +12% about each eyeball centre; the eyeball helpers ride along (D6).
-    # +12% is against the default adult, so the head's +8% is divided out here.
+    # +12% is against the default adult, so the head's scale is divided out here.
     for j, helper in (("joint-l-eye", "helper-l-eye"), ("joint-r-eye", "helper-r-eye")):
         c = jc(j)
         r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
@@ -329,10 +334,18 @@ def build(p0, faces, groups, weights, preset="default"):
         smoothstep(nostrils[1] - 0.16, nostrils[1] - 0.06, p[:, 1])  # stop above the upper lip
     head_band = body[(np.abs(p0[body, 1] - eye_y) < 0.4) & (w_face[body] > 0.9)]
     w_ear = np.zeros(len(p))
+    ear_z = []
     for sd in (1.0, -1.0):
         cand = head_band[side[head_band] == sd]
         ear = p[cand[np.argmax(np.abs(p[cand, 0]))]] - np.array([sd * 0.1, 0.0, 0.0])
+        ear_z.append(ear[2])
         w_ear = np.maximum(w_ear, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
+    # Front of the face: forward of the ears' front and below the upper forehead. The face passes
+    # are faded out beyond it, so the cranium and the back of the head keep HM08's shape (filling
+    # over the whole head inflated the skull into a taller, longer dome on PRXJX2).
+    ear_front = max(ear_z) + 0.25
+    w_front = smoothstep(ear_front, ear_front + 0.35, p[:, 2]) * \
+        (1.0 - smoothstep(eye_y + 0.30, eye_y + 0.55, p[:, 1]))
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
 
@@ -384,13 +397,21 @@ def build(p0, faces, groups, weights, preset="default"):
     # Nose and mouth forward (PRXJX2: "face is too flat, pull nose and mouth slightly outward").
     # Each moves as a whole, with a smooth falloff about a centre set behind the feature, so the
     # nostrils, philtrum and lip corners come along and no edge or crease forms; the cheeks, eyes
-    # and chin stay put. The mouth's falloff takes the teeth and tongue helpers with it.
+    # and chin stay put. The mouth's push is centred just behind the lips, so they move more
+    # than the philtrum and chin and keep a step in profile (PRXJX2: a wider push moved the whole
+    # lower face and left the lips flat).
     nose_c = nose_tip + np.array([0.0, 0.08, -0.12]) * hs
     lip_c = lip + np.array([0.0, -0.06, -0.15]) * hs
-    for out_dm, c, r0, r1 in ((NOSE_OUT, nose_c, 0.10, 0.26), (MOUTH_OUT, lip_c, 0.16, 0.32)):
+    for out_dm, c, r0, r1 in ((NOSE_OUT, nose_c, 0.10, 0.26), (MOUTH_OUT, lip - np.array([0.0, 0.03, 0.03]) * hs, 0.06, 0.16)):
         if out_dm:
             d = np.linalg.norm(p - c, axis=1)
-            p[:, 2] += out_dm * w_face * (1.0 - smoothstep(r0 * hs, r1 * hs, d))
+            fall = 1.0 - smoothstep(r0 * hs, r1 * hs, d)
+            if c is nose_c:  # stops at the nostril base, so the lip keeps its step below it
+                fall *= smoothstep(nose_tip[1] - 0.09 * hs, nose_tip[1] - 0.03 * hs, p[:, 1])
+            p[:, 2] += out_dm * w_face * fall
+    if MOUTH_UP:
+        d = np.linalg.norm(p - lip_c, axis=1)
+        p[:, 1] += MOUTH_UP * w_face * (1.0 - smoothstep(0.14 * hs, 0.30 * hs, d))
 
     # Face simplify: a broad low-pass over the head, so creases (lids, philtrum, nasolabial
     # folds) fill in and the eyes, brows and lips come from the texture. Only the outward part of
@@ -402,7 +423,10 @@ def build(p0, faces, groups, weights, preset="default"):
         head = body[w_face[body] > 0.05]
         n = vertex_normals(p, faces)
         out = np.maximum(((taubin_smooth(p, faces, head, FACE_PASSES) - p) * n).sum(1), 0.0)
-        p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face) * out)[:, None] * n
+        # The lips are kept out: filling the step under the nose left them no edge to read by in
+        # profile (PRXJX2, after the head went back to HM08's size).
+        lips = 1.0 - smoothstep(0.12 * hs, 0.20 * hs, np.linalg.norm(p - lip, axis=1))
+        p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face) * w_front * (1.0 - lips) * out)[:, None] * n
 
     # Face detail cut (PRXJX2: "still some mesh detail we should lose from the face"): a two-sided
     # 4th-order low-pass along the normal takes out the mid-scale relief the fill left (cheekbone
@@ -415,7 +439,7 @@ def build(p0, faces, groups, weights, preset="default"):
         dn = ((lowpass4(p, faces, head, DETAIL_T) - p) * n).sum(1)
         keep = np.maximum(1.0 - smoothstep(0.12 * hs, 0.20 * hs, np.linalg.norm(p - nose_c, axis=1)),
                           1.0 - smoothstep(0.17 * hs, 0.24 * hs, np.linalg.norm(p - lip_c, axis=1)))
-        w_det = FACE_DETAIL * smoothstep(0.3, 0.9, w_face) * (1.0 - w_ear) * (1.0 - keep)
+        w_det = FACE_DETAIL * smoothstep(0.3, 0.9, w_face) * w_front * (1.0 - w_ear) * (1.0 - keep)
         p = p + (w_det * dn)[:, None] * n
 
     # Ears: the concha and antihelix fill up toward the rim, so the ear reads as one simple shell

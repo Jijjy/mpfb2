@@ -91,7 +91,7 @@ Triangle budget at LOD0 (counted with each quad as 2 triangles):
 
 | Region | Tris | Notes |
 |---|---|---|
-| Head and neck | 2,000 | concentric loops around the eyes (≥ 3 rings) and mouth (≥ 3 rings); nasolabial loop; equal loops above and below the eye; mouth bag included |
+| Head and neck | 2,000 | concentric loops around the eyes and mouth, 2 rings each (about 300 of the 2,000 tris for both eyes and the mouth; user, PRXJX2: "fewer vertices, especially around the eyes and mouth"); nasolabial loop; equal loops above and below the eye; mouth bag included |
 | Hands, ×2 | 1,600 | 2 loops per knuckle, palm loop, fingernail as a face set only (no geometry step) |
 | Torso | 2,400 | pectoral and shoulder loops follow the deltoid; 3 loops each at clavicle and waist |
 | Arms | 1,200 | 3 loops each at elbow and wrist |
@@ -232,10 +232,10 @@ on top. Scales are relative to the HM08 default adult:
 
 | Feature | Change |
 |---|---|
-| Head | uniform +8%; cranium −3% against that, from the brow up, pivoted on the forehead's front, so the crown comes down and the forehead is shorter |
+| Head | uniform +3%, cranium shape unchanged: overall size and shape close to HM08 (user, PRXJX2); the stylization comes from the features. Face smoothing stays on the front of the face, so the skull is not reshaped |
 | Eyes (sockets and lids) | +22% (D6), with lid loops shaped for the larger eyeball; brought 2.5 mm forward toward the face plane |
-| Nose and ears | nose −20% toward the cheek plane; nostril flare flattened by about 80%; ear concha and folds filled up to the rim (helix kept) |
-| Mouth | −18% (lips flattened further, −26% in depth) |
+| Nose and ears | nose −12% toward the cheek plane, brought 5.5 mm forward down to the nostril base; nostril flare flattened by about 80%; ear concha and folds filled up to the rim (helix kept) |
+| Mouth | −10% (lips −15% in depth); lips brought 4.5 mm forward, more than the philtrum and chin, so they keep a step in profile; moved 1.5 mm up toward the nose (shorter philtrum) |
 | Jaw | lower face 10% narrower toward a smaller chin |
 | Face relief | broad low-pass over the head: lid creases, philtrum, lip volume, nasolabial folds and brow ridge removed; eyes, brows and lips read from the texture |
 | Hands | +12% |
@@ -244,7 +244,7 @@ on top. Scales are relative to the HM08 default adult:
 | Shoulders | +6% wider |
 | Waist | −4% |
 | Lower leg | +3% longer |
-| Overall height | about 7 heads tall |
+| Overall height | about 7.2 heads tall (head/height 0.1385; the check range 0.135–0.15 holds) |
 
 ### 6.2 Macro changes
 
