@@ -173,7 +173,7 @@ attached last.
    Adding a rig consumes no random draws. This happens before the body parts so `add_mhclo_asset` finds the Skeleton and rigs each child mesh as it attaches.
 9. If skin randomization is enabled, discovers the installed skins via `AssetService.list_mhmat_assets("skins")`, resolves each skin's pack membership from the
    pack metadata, and calls `RandomizationService.pick_random_skin(...)` (drawing from the same `random.Random` after the phenotype draws). A non-`None` pick is
-   applied with `HumanService.set_character_skin()` — material instances are forced off for the LAYERED, GAMEENGINE and MAKESKIN skin types, and the active
+   applied with `HumanService.set_character_skin()` using the configured `skin_type` (`STYLIZED`), and the active
    material slot is set to the body material afterwards. If the pool is empty (nothing matched, or no skins are installed) the human keeps its default material
    and a WARNING is reported. When skin randomization is disabled no skin draw happens at all, so a given seed produces the same phenotype either way.
 10. Attaches the body parts, in the fixed type order `eyebrows, eyelashes, eyes, hair, teeth, tongue`, drawing from the same `random.Random` after the skin. For
@@ -322,7 +322,7 @@ The panel loads its global and creation settings from `src/mpfb/ui/new_human/ran
 | `skin_pack` | string | `""` | Only pick skins in an asset pack whose name contains this string. Empty allows all packs. |
 | `skin_include` | string | `""` | Comma-separated keywords; keep only skins whose name contains at least one of them. Empty allows all names. |
 | `skin_exclude` | string | `"special_suit"` | Comma-separated keywords; never pick skins whose name contains any of them. Defaults to excluding the system pack's painted-on clothing textures. |
-| `skin_type` | enum | `"MAKESKIN"` | Skin material type used for the picked skin. Same options as the asset library: `GAMEENGINE`, `MAKESKIN`, `ENHANCED`, `ENHANCED_SSS`, `LAYERED`. |
+| `skin_type` | enum | `"STYLIZED"` | Skin material type used for the picked skin. Same options as the asset library: `STYLIZED` only. |
 | `auto_generate_rigify` | boolean | `true` | If the chosen rig is a Rigify metarig, also generate the full Rigify rig from it after the body parts are attached. |
 | `meta_rig_action` | enum | `"hide"` | What to do with the metarig after generating the full Rigify rig: `keep`, `hide` or `delete`. |
 | `asset_material_type` | enum | `"MAKESKIN"` | Material type for the attached body parts (all except eyes). Options: `GAMEENGINE`, `MAKESKIN`. |

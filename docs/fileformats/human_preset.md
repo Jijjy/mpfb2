@@ -79,11 +79,8 @@ Asset source paths for each body part slot. Each is a string (empty if no asset 
 #### Skin material
 
 - `skin_mhmat` (string) — Path to the MakeHuman material file used for the skin.
-- `skin_material_type` (string) — Material shader type: `"NONE"`, `"MAKESKIN"`, `"ENHANCED"`, `"ENHANCED_SSS"`, `"LAYERED"`, or `"GAMEENGINE"`.
-- `skin_material_settings` (object) — Shader parameter values. Structure depends on `skin_material_type`:
-  - For `"ENHANCED"` / `"ENHANCED_SSS"`: Zone-keyed object (see [Material Settings](material_settings.md)).
-  - For `"LAYERED"`: Keyed by shader group name (`"color"`, `"body"`, `"face"`, `"ears"`, etc.) with node socket values.
-  - For other types: Empty object or not present.
+- `skin_material_type` (string) — `"STYLIZED"`, or `"NONE"` when the body has no MPFB skin. Older files may hold `"MAKESKIN"`, `"ENHANCED"`, `"ENHANCED_SSS"`, `"LAYERED"` or `"GAMEENGINE"`; these load as `"STYLIZED"` with default settings, and their `skin_material_settings` are dropped.
+- `skin_material_settings` (object) — For `"STYLIZED"`: a single `"stylized"` key holding the stylized skin group node's input values (`SkinTone`, `BloodStrength`, `CavityStrength`, `RoughnessMin`, `SubsurfaceWeight`, ...). Otherwise empty.
 
 #### Eye material
 
@@ -126,13 +123,14 @@ Asset source paths for each body part slot. Each is a string (empty if no asset 
         "clothes/male_casualsuit01"
     ],
     "skin_mhmat": "skins/young_caucasian_female/young_caucasian_female.mhmat",
-    "skin_material_type": "ENHANCED",
+    "skin_material_type": "STYLIZED",
     "skin_material_settings": {
-        "body": {
-            "Brightness": 0.0,
-            "Roughness": 0.45,
-            "colorMixIn": [0.5, 0.3, 0.2, 1.0],
-            "colorMixInStrength": 0.0
+        "stylized": {
+            "SkinTone": [0.6, 0.4, 0.3, 1.0],
+            "BloodStrength": 0.25,
+            "CavityStrength": 0.4,
+            "RoughnessMin": 0.4,
+            "RoughnessMax": 0.6
         }
     },
     "eyes_material_type": "PROCEDURAL_EYES",

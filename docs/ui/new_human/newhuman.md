@@ -136,7 +136,7 @@ Both `MPFB_PT_NewHuman_Panel` and `MPFB_PT_From_Presets_Panel` read properties f
 | `mask_helpers` | boolean | `true` | Add a MASK modifier to the basemesh to hide the helper geometry in the viewport while keeping it available for rigging and other operations. |
 | `override_clothes_model` | enum | `"PRESET"` | Override the material model used for clothes, ignoring what is stored in the preset. Options: `NONE` (no override), `PRESET` (use preset value), `GAMEENGINE`, `MAKESKIN`. |
 | `override_eyes_model` | enum | `"PRESET"` | Override the material model used for eyes. Options: `NONE`, `PRESET`, `GAMEENGINE`, `MAKESKIN`, `PROCEDURAL_EYES`. |
-| `override_skin_model` | enum | `"PRESET"` | Override the skin material model. Options: `NONE`, `PRESET`, `GAMEENGINE`, `MAKESKIN`, `ENHANCED`, `ENHANCED_SSS`, `LAYERED`. |
+| `override_skin_model` | enum | `"PRESET"` | Override the skin material model. Options: `NONE`, `PRESET`, `STYLIZED`. |
 | `phenotype_age` | enum | `"young"` | Initial age target to apply. Options: `old`, `young`, `child`, `baby`. |
 | `phenotype_breastfirmness` | enum | `"maxfirmness"` | Breast firmness target. Options: `minfirmness`, `maxfirmness`. |
 | `phenotype_breastsize` | enum | `"maxcup"` | Breast cup-size target. Options: `mincup`, `maxcup`. |

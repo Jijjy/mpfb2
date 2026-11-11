@@ -301,7 +301,7 @@ Loaded from JSON files in `src/mpfb/ui/apply_assets/assetlibrary/properties/` wi
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `skin_type` | enum | `MAKESKIN` | Material type for skin: `GAMEENGINE` (simple PBR for export), `MAKESKIN` (PBR with image textures), `ENHANCED` (adds procedural aspects), `ENHANCED_SSS` (Enhanced plus subsurface scattering), `LAYERED` (most complex multilayered procedural skin) |
+| `skin_type` | enum | `STYLIZED` | Material type for skin. `STYLIZED` is the only option. |
 | `clothes_type` | enum | `MAKESKIN` | Material type for clothes and hair: `GAMEENGINE` or `MAKESKIN` |
 | `eyes_type` | enum | `MAKESKIN` | Material type for eyes: `GAMEENGINE`, `MAKESKIN`, or `PROCEDURAL_EYES` (fully procedural with dynamic colour controls) |
 | `fit_to_body` | boolean | `true` | Deform the imported clothes to match the character's current body shape |
