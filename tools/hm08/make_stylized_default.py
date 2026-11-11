@@ -36,6 +36,8 @@ NECK = 1.10          # thickness, X and Z
 SHOULDERS = 1.06     # width at the shoulder joints
 WAIST = 0.96
 LOWER_LEG = 1.03
+SIMPLIFY = 0.85      # share of the body's fine relief (muscle, folds, creases) removed
+SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 
 LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
                   r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
@@ -112,6 +114,36 @@ def laplacian_smooth(p, nb, iterations):
     q = p.copy()
     for _ in range(iterations):
         q = np.array([q[ix].mean(0) for ix in nb])
+    return q
+
+
+def taubin_smooth(p, faces, verts, passes, lam=0.5, mu=-0.53):
+    """Low-pass of the surface over `verts` that keeps volume (Taubin 1995): fingers and ears do
+    not shrink the way they do under plain Laplacian smoothing. Open-boundary vertices (eye and
+    mouth openings) stay put."""
+    import scipy.sparse as sp
+    keep = np.zeros(len(p), bool)
+    keep[verts] = True
+    edges = {}
+    for f in faces:
+        if not keep[f].all():
+            continue
+        for a, b in zip(f, f[1:] + f[:1]):
+            k = (min(a, b), max(a, b))
+            edges[k] = edges.get(k, 0) + 1
+    e = np.array(list(edges))
+    boundary = np.zeros(len(p), bool)
+    boundary[e[np.array(list(edges.values())) == 1].ravel()] = True
+    n = len(p)
+    adj = sp.coo_matrix((np.ones(2 * len(e)), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])),
+                        shape=(n, n)).tocsr()
+    deg = np.asarray(adj.sum(1)).ravel()
+    move = keep & ~boundary & (deg > 0)
+    avg = sp.diags(np.where(deg > 0, 1.0 / np.maximum(deg, 1), 0.0)) @ adj
+    q = p.copy()
+    for _ in range(passes):
+        for f in (lam, mu):
+            q[move] += f * (avg @ q - q)[move]
     return q
 
 
@@ -202,6 +234,11 @@ def build(p0, faces, groups, weights):
         w_flat = np.maximum(w_flat, 1.0 - smoothstep(0.25, 0.45, np.linalg.norm(p - ear, axis=1)))
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
+
+    # Simplify: take out most of the fine relief over the whole body (muscle definition, skin
+    # folds, lip and lid creases) so the forms read as broad shapes (spec R1, R4). Helpers and
+    # joint cubes are left alone.
+    p = p + SIMPLIFY * (taubin_smooth(p, faces, body, SIMPLIFY_PASSES) - p)
 
     # Keep the soles on the ground plane.
     p[:, 1] += p0[body, 1].min() - p[body, 1].min()

@@ -1,19 +1,25 @@
-"""Blocking-out renders of `stylized-default` next to the HM08 default adult (grey, left).
+"""Blocking-out renders: OG HM08 default adult (grey, left) next to `stylized-default` (tan, right).
 
     blender -b --factory-startup -P tools/hm08/render_blockout.py -- <out_dir>
 
-Writes front.png, side.png, three_quarter.png, and face_front_<fig>.png /
-face_three_quarter_<fig>.png close-ups for fig in hm08, stylized. Workbench engine, no addon needed.
+Writes, each with both figures labelled:
+- front.png, three_quarter.png, side.png: full body
+- face_front.png, face_three_quarter.png: head close-ups
+- density_face.png, density_torso.png: wireframe of OG HM08 at its own density next to the
+  stylized shape decimated to the D2 LOD0 budget (18k body tris). The decimated mesh is only a
+  preview of the density sty01 (§4) will have; sty01 itself is hand-built quads.
+Workbench engine, no addon needed.
 """
 import math
 import os
 import sys
 
 import bpy
-import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import make_stylized_default as msd  # noqa: E402
+
+BUDGET = 18000  # D2: body + head triangles at LOD0
 
 out_dir = os.path.abspath(sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else ".")
 os.makedirs(out_dir, exist_ok=True)
@@ -27,56 +33,115 @@ body_faces = [f for f in faces if all(v in body for v in f)]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
+GREY, TAN, WIRE = (0.55, 0.55, 0.55, 1.0), (0.85, 0.62, 0.48, 1.0), (0.05, 0.05, 0.07, 1.0)
 
 
-def add_figure(name, p, x_offset, color):
+def material(name, color):
+    mat = bpy.data.materials.new(name)
+    mat.diffuse_color = color
+    return mat
+
+
+def add_mesh(name, p, color):
     verts = [(x, -z, y) for x, y, z in p]  # base.obj Y-up/+Z-forward to Blender Z-up/-Y
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], body_faces)
     mesh.shade_smooth()
+    mesh.materials.append(material(name, color))
     obj = bpy.data.objects.new(name, mesh)
-    obj.location.x = x_offset
     scene.collection.objects.link(obj)
-    mat = bpy.data.materials.new(name)
-    mat.diffuse_color = color
-    mesh.materials.append(mat)
     return obj
 
 
-add_figure("hm08_default", p0, -6.0, (0.55, 0.55, 0.55, 1.0))
-add_figure("stylized_default", p1, 6.0, (0.85, 0.62, 0.48, 1.0))
+def apply_modifier(obj, kind, **kw):
+    mod = obj.modifiers.new(kind, kind)
+    for k, v in kw.items():
+        setattr(mod, k, v)
+    dg = bpy.context.evaluated_depsgraph_get()
+    mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(dg))
+    obj.modifiers.clear()
+    obj.data = mesh
+    return obj
+
+
+def tri_count(obj):
+    return sum(len(poly.vertices) - 2 for poly in obj.data.polygons)
+
+
+def wire_copy(obj, thickness):
+    wire = obj.copy()
+    wire.data = obj.data.copy()
+    wire.data.materials.clear()
+    wire.data.materials.append(material(obj.name + "_wire", WIRE))
+    scene.collection.objects.link(wire)
+    mod = wire.modifiers.new("wire", "WIREFRAME")
+    mod.thickness, mod.use_relative_offset, mod.use_even_offset = thickness, False, False
+    mod.offset = 1.0
+    return wire
+
+
+def add_label(text, size):
+    curve = bpy.data.curves.new(text, "FONT")
+    curve.body, curve.size, curve.align_x = text, size, "CENTER"
+    obj = bpy.data.objects.new(text, curve)
+    obj.rotation_euler = (math.radians(90), 0.0, 0.0)
+    obj.data.materials.append(material(text, (0.95, 0.95, 0.95, 1.0)))
+    scene.collection.objects.link(obj)
+    return obj
+
+
+og = add_mesh("og_hm08", p0, GREY)
+new = add_mesh("stylized_default", p1, TAN)
+og_tris = tri_count(og)
+low = add_mesh("stylized_budget", p1, TAN)
+apply_modifier(low, "DECIMATE", ratio=BUDGET / og_tris, use_collapse_triangulate=False)
+low_tris = tri_count(low)
+low.data.shade_smooth()
 
 scene.render.engine = "BLENDER_WORKBENCH"
 shading = scene.display.shading
-shading.light = "STUDIO"
-shading.color_type = "MATERIAL"
-shading.show_cavity = True
-shading.show_shadows = False
+shading.light, shading.color_type = "STUDIO", "MATERIAL"
+shading.show_cavity, shading.show_shadows = True, False
 scene.render.resolution_x, scene.render.resolution_y = 1280, 720
-scene.render.film_transparent = False
 scene.world = bpy.data.worlds.new("w")
 scene.world.color = (0.18, 0.18, 0.2)
 
 cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
 cam.data.type = "ORTHO"
-cam.data.ortho_scale = 35.0
+cam.rotation_euler = (math.radians(90), 0.0, 0.0)
 scene.collection.objects.link(cam)
 scene.camera = cam
 
-cam.location = (0.0, -60.0, 0.3)
-cam.rotation_euler = (math.radians(90), 0.0, 0.0)
-
-# The figures turn in place; the camera stays put so both stay in frame.
-VIEWS = [("front", 0.0, 0.0, 0.3, 35.0), ("three_quarter", 35.0, 0.0, 0.3, 35.0),
-         ("side", 90.0, 0.0, 0.3, 35.0)]
-for name, x in (("hm08", -6.0), ("stylized", 6.0)):
-    VIEWS += [(f"face_front_{name}", 0.0, x, 7.7, 5.5), (f"face_three_quarter_{name}", 35.0, x, 7.7, 5.5)]
-
-for label, yaw, x, z, scale in VIEWS:
-    cam.location.x, cam.location.z = x, z
-    cam.data.ortho_scale = scale
-    for obj in scene.objects:
-        if obj.type == "MESH":
-            obj.rotation_euler = (0.0, 0.0, math.radians(yaw))
-    scene.render.filepath = os.path.join(out_dir, f"{label}.png")
+# (file, left figure, right figure, left label, right label, half gap, yaw, camera z, ortho,
+#  label z, label size, wire thickness)
+og_l, new_l = "OG: HM08 default adult", "NEW: stylized-default"
+dens_l = (f"OG: HM08, {og_tris:,} tris", f"NEW, decimated to {low_tris:,} tris")
+SHOTS = [
+    ("front", og, new, og_l, new_l, 6.0, 0.0, 0.3, 35.0, 9.0, 0.6, 0),
+    ("three_quarter", og, new, og_l, new_l, 6.0, 35.0, 0.3, 35.0, 9.0, 0.6, 0),
+    ("side", og, new, og_l, new_l, 6.0, 90.0, 0.3, 35.0, 9.0, 0.6, 0),
+    ("face_front", og, new, og_l, new_l, 1.7, 0.0, 7.8, 6.0, 9.15, 0.2, 0),
+    ("face_three_quarter", og, new, og_l, new_l, 1.7, 35.0, 7.8, 6.0, 9.15, 0.2, 0),
+    ("density_face", og, low, *dens_l, 1.7, 20.0, 7.8, 6.0, 9.05, 0.15, 0.006),
+    ("density_torso", og, low, *dens_l, 5.5, 20.0, 4.5, 16.0, 8.7, 0.3, 0.012),
+]
+figures = (og, new, low)
+for name, left, right, l_text, r_text, gap, yaw, z, ortho, lz, lsize, wire in SHOTS:
+    for obj in figures:
+        obj.hide_render = obj not in (left, right)
+    extras = []
+    for obj, x, text in ((left, -gap, l_text), (right, gap, r_text)):
+        obj.location.x = x
+        obj.rotation_euler = (0.0, 0.0, math.radians(yaw))
+        label = add_label(text, lsize)
+        label.location = (x, -20.0, lz)
+        extras.append(label)
+        if wire:
+            extras.append(wire_copy(obj, wire))
+    cam.location = (0.0, -60.0, z)
+    cam.data.ortho_scale = ortho
+    scene.render.filepath = os.path.join(out_dir, f"{name}.png")
     bpy.ops.render.render(write_still=True)
+    for obj in extras:
+        bpy.data.objects.remove(obj)
+print(f"og tris {og_tris}, budget preview tris {low_tris}")
