@@ -33,10 +33,15 @@ p1 = msd.build(p0, faces, groups, msd.load_weights(len(p0)))
 p_subtle = msd.build(p0, faces, groups, msd.load_weights(len(p0)), "subtle")
 body = set(groups["body"].tolist())
 body_faces = [f for f in faces if all(v in body for v in f)]
+# Eyeballs (the HM08 eye helpers, which the target moves with the sockets), so the eye openings
+# do not read as empty holes. Kept out of the triangle counts.
+eye_verts = set(groups["helper-l-eye"].tolist()) | set(groups["helper-r-eye"].tolist())
+eye_faces = [f for f in faces if all(v in eye_verts for v in f)]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 SUBTLE = (0.80, 0.50, 0.40, 1.0)
+EYE = (0.92, 0.92, 0.9, 1.0)
 GREY, TAN, WIRE = (0.55, 0.55, 0.55, 1.0), (0.85, 0.62, 0.48, 1.0), (0.05, 0.05, 0.07, 1.0)
 
 
@@ -46,14 +51,17 @@ def material(name, color):
     return mat
 
 
-def add_mesh(name, p, color):
+def add_mesh(name, p, color, mesh_faces=None, eyes=True):
     verts = [(x, -z, y) for x, y, z in p]  # base.obj Y-up/+Z-forward to Blender Z-up/-Y
     mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts, [], body_faces)
+    mesh.from_pydata(verts, [], body_faces if mesh_faces is None else mesh_faces)
     mesh.shade_smooth()
     mesh.materials.append(material(name, color))
     obj = bpy.data.objects.new(name, mesh)
     scene.collection.objects.link(obj)
+    if eyes:
+        eye = add_mesh(name + "_eyes", p, EYE, eye_faces, eyes=False)
+        eye.parent = obj
     return obj
 
 
@@ -98,7 +106,7 @@ og = add_mesh("og_hm08", p0, GREY)
 new = add_mesh("stylized_default", p1, TAN)
 subtle = add_mesh("stylized_subtle", p_subtle, SUBTLE)
 og_tris = tri_count(og)
-low = add_mesh("stylized_budget", p1, TAN)
+low = add_mesh("stylized_budget", p1, TAN, eyes=False)
 apply_modifier(low, "DECIMATE", ratio=BUDGET / og_tris, use_collapse_triangulate=False)
 low_tris = tri_count(low)
 low.data.shade_smooth()
@@ -139,6 +147,8 @@ for name, figs, spacing, yaw, z, ortho, lz, lsize, wire in SHOTS:
     shown = [obj for obj, _ in figs]
     for obj in figures:
         obj.hide_render = obj not in shown
+        for child in obj.children:
+            child.hide_render = obj.hide_render
     extras = []
     for i, (obj, text) in enumerate(figs):
         x = (i - (len(figs) - 1) / 2) * spacing

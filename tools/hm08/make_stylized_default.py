@@ -153,6 +153,17 @@ def taubin_smooth(p, faces, verts, passes, lam=0.5, mu=-0.53):
     return q
 
 
+def vertex_normals(p, faces):
+    """Area-weighted outward vertex normals (HM08 faces wind counter-clockwise from outside)."""
+    n = np.zeros_like(p)
+    for f in faces:
+        fn = np.cross(p[f[1]] - p[f[0]], p[f[2]] - p[f[0]])
+        if len(f) == 4:
+            fn = fn + np.cross(p[f[2]] - p[f[0]], p[f[3]] - p[f[0]])
+        n[f] += fn
+    return n / np.maximum(np.linalg.norm(n, axis=1), 1e-12)[:, None]
+
+
 def scale_about(p, w, pivot, s):
     """Blend p toward a uniform (or per-axis) scale about pivot by per-vertex weight w."""
     return p + w[:, None] * (np.asarray(s) - 1.0) * (p - pivot)
@@ -246,20 +257,44 @@ def build(p0, faces, groups, weights, preset="default"):
     w_flat[~np.isin(np.arange(len(p)), body)] = 0.0
     p = p - (FLATTEN * w_flat)[:, None] * (p - smooth)
 
-    # Nose: scale toward a pivot behind it at cheek depth, so it shrinks and sits flatter.
+    # Nose and mouth shrink only what stands in front of the face around them, so the cheeks,
+    # brow and philtrum stay where they are. (Scaling the whole region toward a pivot inside the
+    # head pulled the midface in with them and made the face concave on PRXJX2.)
+    # Nose: its height above the cheek plane scales by NOSE; the part that stands out also
+    # narrows and shortens toward the nose's centre. Faded out above the eye line and below the
+    # nostrils.
     if NOSE != 1.0:
-        nose_c = nose_tip + np.array([0.0, 0.12, -0.18])
-        w_nose = (1.0 - smoothstep(0.22, 0.42, np.linalg.norm(p - nose_c, axis=1))) * w_face
-        p = scale_about(p, w_nose, nose_tip + np.array([0.0, 0.05, -0.45]), NOSE)
+        hs = HEAD  # offsets below are in default-adult decimetres; the head has been scaled
+        cheek = front_face = body[(w_face[body] > 0.9) & (p0[body, 2] > 0.8)]
+        cheek = cheek[(np.abs(p[cheek, 0]) > 0.30 * hs) & (np.abs(p[cheek, 0]) < 0.36 * hs)
+                      & (np.abs(p[cheek, 1] - nose_tip[1] - 0.15 * hs) < 0.15 * hs)]
+        cheek_z = np.median(p[cheek, 2])
+        h = np.maximum(p[:, 2] - cheek_z, 0.0)
+        w = np.isin(np.arange(len(p)), front_face) * \
+            (1.0 - smoothstep(0.20 * hs, 0.30 * hs, np.abs(p[:, 0]))) * \
+            (1.0 - smoothstep(eye_y - 0.15 * hs, eye_y + 0.05 * hs, p[:, 1])) * \
+            smoothstep(nose_tip[1] - 0.14 * hs, nose_tip[1] - 0.08 * hs, p[:, 1])
+        t = w * smoothstep(0.0, 0.12 * hs, h)
+        nose_mid = nose_tip[1] + 0.12 * hs
+        p[:, 2] -= (1.0 - NOSE) * w * h
+        p[:, 0] -= (1.0 - NOSE) * t * p[:, 0]
+        p[:, 1] -= (1.0 - NOSE) * t * (p[:, 1] - nose_mid)
 
-    # Mouth: smaller and flatter lips, about the mouth joint pulled back into the head.
-    mouth = jc("joint-mouth")
+    # Mouth: narrower and shorter about the lip centre, in the face's own plane, and the lips'
+    # height above the philtrum/chin line scales by MOUTH^1.5 (flatter, simpler lips).
+    mouth = jc("joint-mouth")  # the jaw's hinge, level with the nose; not the lips
     if MOUTH != 1.0:
-        lip_front = p[front[np.abs(p[front, 1] - mouth[1]) < 0.1], 2].max()
-        mc = np.array([0.0, mouth[1], lip_front])
-        w_mouth = (1.0 - smoothstep(0.18, 0.40, np.linalg.norm((p - mc) * [1.0, 1.4, 1.0], axis=1)))
-        w_mouth *= w_face
-        p = scale_about(p, w_mouth, mc - np.array([0.0, 0.0, 0.25]), [MOUTH, MOUTH, MOUTH ** 1.5])
+        hs = HEAD
+        mid = front[(p[front, 1] < nose_tip[1] - 0.12 * hs) & (p[front, 1] > nose_tip[1] - 0.40 * hs)
+                    & (w_face[front] > 0.9)]
+        lip = p[mid[np.argmax(p[mid, 2])]]
+        base_z = lip[2] - 0.06 * hs
+        w = w_face * (1.0 - smoothstep(0.30 * hs, 0.45 * hs, np.abs(p[:, 0]))) * \
+            (1.0 - smoothstep(0.10 * hs, 0.18 * hs, np.abs(p[:, 1] - lip[1]))) * \
+            smoothstep(base_z - 0.25 * hs, base_z, p[:, 2])
+        p[:, 0] -= (1.0 - MOUTH) * w * p[:, 0]
+        p[:, 1] -= (1.0 - MOUTH) * w * (p[:, 1] - lip[1])
+        p[:, 2] -= (1.0 - MOUTH ** 1.5) * w * np.maximum(p[:, 2] - base_z, 0.0)
 
     # Jaw: narrow the lower face toward a smaller chin, from the cheekbones down.
     if JAW != 1.0:
@@ -267,13 +302,17 @@ def build(p0, faces, groups, weights, preset="default"):
         w_jaw *= smoothstep(jc("joint-jaw")[2] - 0.3, jc("joint-jaw")[2] + 0.4, p[:, 2])
         p = scale_about(p, w_jaw, np.array([0.0, mouth[1], 0.0]), [JAW, 1.0, 1.0])
 
-    # Face simplify: a broad low-pass over the head, so the features are soft swells and the
-    # eyes, brows and lips come from the texture. The eye and mouth openings stay put (open
-    # boundaries); the falloff fades out down the neck.
+    # Face simplify: a broad low-pass over the head, so creases (lids, philtrum, nasolabial
+    # folds) fill in and the eyes, brows and lips come from the texture. Only the outward part of
+    # the low-pass is kept, along the surface normal: a plain low-pass pulls the cheeks, brow and
+    # nose bridge back toward the recessed eye and mouth openings (fixed boundaries), which made
+    # the face concave on PRXJX2. Filling only keeps every form at or in front of where it was.
+    # The falloff fades out down the neck.
     if FACE_SIMPLIFY:
         head = body[w_face[body] > 0.05]
-        p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face))[:, None] * \
-            (taubin_smooth(p, faces, head, FACE_PASSES) - p)
+        n = vertex_normals(p, faces)
+        out = np.maximum(((taubin_smooth(p, faces, head, FACE_PASSES) - p) * n).sum(1), 0.0)
+        p = p + (FACE_SIMPLIFY * smoothstep(0.3, 0.9, w_face) * out)[:, None] * n
 
     # Simplify: take out most of the fine relief over the whole body (muscle definition, skin
     # folds, lip and lid creases) so the forms read as broad shapes (spec R1, R4). Helpers and
