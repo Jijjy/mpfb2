@@ -29,7 +29,7 @@ OUT = os.path.join(HERE, "stylized-default.target.gz")
 # PRXJX2 (much more stylized, facial detail left to textures). "subtle" is the first §6.1 table,
 # kept only so the renders can show how far the default moved.
 PRESETS = {
-    "default": dict(HEAD=1.08, CRANIUM=1.045, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
+    "default": dict(HEAD=1.08, CRANIUM=0.97, EYES=1.22, FLATTEN=0.80, HANDS=1.12, FEET=1.10,
                     NECK=1.06, SHOULDERS=1.06, WAIST=0.96, LOWER_LEG=1.03, SIMPLIFY=0.90,
                     NOSE=0.80, MOUTH=0.82, JAW=0.90, FACE_SIMPLIFY=1.0,
                     EYE_FORWARD=0.025, EAR_FILL=1.0),
@@ -256,10 +256,10 @@ def build(p0, faces, groups, weights, preset="default"):
     neck_top = jc("joint-neck") * 0.5 + jc("joint-head") * 0.5
     p = scale_about(p, w_face, neck_top, HEAD)
 
-    # Cranium +4% more: about the eye line, weighted from the brow up, so the face is smaller
-    # relative to the skull. The pivot sits on the forehead's front, so the skull grows up and
-    # back: a pivot at the head's centre pushed the forehead forward of the nose and lips and
-    # dished the profile (PRXJX2: "still a little concave").
+    # Cranium -3% against the +8% head: weighted from the brow up, so the crown comes down and the
+    # forehead is shorter (PRXJX2: "forehead too large", the growing cranium read as alien). The
+    # pivot sits on the forehead's front, so the forehead stays put and only the crown and the
+    # back of the skull move: a pivot at the head's centre dished the profile.
     eye_y = jc("joint-l-eye")[1]
     front_head = body[(np.abs(p[body, 0]) < 0.1) & (np.abs(p[body, 1] - eye_y - 0.4) < 0.1)]
     w_cran = w_face * smoothstep(eye_y - 0.1, eye_y + 0.6, p[:, 1])
