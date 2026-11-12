@@ -22,6 +22,14 @@ at UV (0.295, 0.30), the other at (0.705, 0.70), eyeball radius 0.285 in UV unit
 constants as the old procedural eyes). +V points up on both eyes, but the direction of +U
 differs between the high-poly and low-poly eyes, so the outer side for the catchlight comes
 from the sign of (object-space X of the point) * (object-space X of the UV tangent).
+
+The high-poly eye also has, per eye, a closed outer shell (its cornea) that encloses the
+eyeball, so it is all the camera sees. Its UVs are a small disc of its own, centred at
+(0.9353, 0.0668), radius about 0.056, shared by both eyes and turned 45 degrees: UV (1, 1)
+points up and UV (1, -1) points outward on both. A point on that disc is projected on those two axes
+and scaled up to eyeball UV units, with SHELL_UV_RADIUS chosen so that, seen from the front,
+the iris edge sits where it does on the high-poly eyeball inside the shell (0.38 of the eye's
+radius at the default IrisSize), and its outer side is +X. The shell is painted opaque like the eyeball.
 """
 
 import bpy
@@ -41,6 +49,15 @@ PROCEDURAL_EYES_MARKER_KEY = "IrisMinorColor"
 EYE_CENTER_1 = [0.295, 0.30, 0.0]
 EYE_CENTER_2 = [0.705, 0.70, 0.0]
 EYEBALL_UV_RADIUS = 0.285
+
+# Outer shell of the high-poly eye: UV disc centre, the UV distance under which a point is on
+# it (no eyeball UV comes this close), and the shell UV distance that maps to
+# EYEBALL_UV_RADIUS on the eyeball
+SHELL_UV_CENTER = [0.9353, 0.0668, 0.0]
+SHELL_UV_EXTENT = 0.07
+SHELL_UV_RADIUS = 0.053
+# Shell UV axes, outward (1, -1) and up (1, 1), normalised and scaled to eyeball UV units
+_SHELL_AXIS = EYEBALL_UV_RADIUS / SHELL_UV_RADIUS / 2.0 ** 0.5
 
 # Catchlight centre in iris-local units (iris radius = 1): outward and up, close enough to
 # the pupil that the ellipse overlaps its edge (white on black reads at any size) and low
@@ -99,7 +116,14 @@ _GROUP_NODES = [
     ("ShaderNodeVectorMath", "Distance 2", {"location": [-1600.0, -180.0], "operation": "DISTANCE"}, {}),
     ("ShaderNodeMath", "Nearer is 2", {"location": [-1400.0, -60.0], "operation": "GREATER_THAN"}, {}),
     ("ShaderNodeMix", "Nearest center", {"location": [-1400.0, -240.0], "data_type": "VECTOR", "clamp_factor": True}, {}),
-    ("ShaderNodeVectorMath", "Offset", {"location": [-1200.0, 0.0], "operation": "SUBTRACT"}, {}),
+    ("ShaderNodeVectorMath", "Eyeball offset", {"location": [-1200.0, 0.0], "operation": "SUBTRACT"}, {}),
+    ("ShaderNodeVectorMath", "Shell offset", {"location": [-1600.0, 400.0], "operation": "SUBTRACT"}, {"Vector_001": SHELL_UV_CENTER}),
+    ("ShaderNodeVectorMath", "Shell distance", {"location": [-1400.0, 500.0], "operation": "LENGTH"}, {}),
+    ("ShaderNodeMath", "On shell", {"location": [-1200.0, 500.0], "operation": "LESS_THAN"}, {"Value_001": SHELL_UV_EXTENT}),
+    ("ShaderNodeVectorMath", "Shell out", {"location": [-1400.0, 350.0], "operation": "DOT_PRODUCT"}, {"Vector_001": [_SHELL_AXIS, -_SHELL_AXIS, 0.0]}),
+    ("ShaderNodeVectorMath", "Shell up", {"location": [-1400.0, 200.0], "operation": "DOT_PRODUCT"}, {"Vector_001": [_SHELL_AXIS, _SHELL_AXIS, 0.0]}),
+    ("ShaderNodeCombineXYZ", "Shell scaled", {"location": [-1200.0, 300.0]}, {"Z": 0.0}),
+    ("ShaderNodeMix", "Offset", {"location": [-1000.0, 200.0], "data_type": "VECTOR", "clamp_factor": True}, {}),
     ("ShaderNodeMath", "Iris radius", {"location": [-1200.0, -200.0], "operation": "MULTIPLY"}, {"Value_001": EYEBALL_UV_RADIUS}),
     ("ShaderNodeMath", "Iris inverse", {"location": [-1000.0, -200.0], "operation": "DIVIDE"}, {"Value": 1.0}),
     ("ShaderNodeVectorMath", "Iris local", {"location": [-800.0, 0.0], "operation": "SCALE"}, {}),
@@ -131,6 +155,7 @@ _GROUP_NODES = [
     ("ShaderNodeSeparateXYZ", "Position XYZ", {"location": [-800.0, -800.0]}, {}),
     ("ShaderNodeMath", "Outward", {"location": [-600.0, -650.0], "operation": "MULTIPLY"}, {}),
     ("ShaderNodeMath", "Outward sign", {"location": [-400.0, -650.0], "operation": "SIGN"}, {}),
+    ("ShaderNodeMix", "Outward side", {"location": [-300.0, -800.0], "data_type": "FLOAT", "clamp_factor": True}, {"B_Float": 1.0}),
     ("ShaderNodeMath", "Catchlight X", {"location": [-200.0, -650.0], "operation": "MULTIPLY"}, {"Value_001": CATCHLIGHT_OFFSET_OUT}),
     ("ShaderNodeCombineXYZ", "Catchlight center", {"location": [0.0, -650.0]}, {"Y": CATCHLIGHT_OFFSET_UP, "Z": 0.0}),
     ("ShaderNodeVectorMath", "Catchlight offset", {"location": [200.0, -500.0], "operation": "SUBTRACT"}, {}),
@@ -155,11 +180,21 @@ _GROUP_LINKS = [
     ("Nearer is 2", "Value", "Nearest center", "Factor_Float"),
     ("Center 1", "Vector", "Nearest center", "A_Vector"),
     ("Center 2", "Vector", "Nearest center", "B_Vector"),
-    ("Texture Coordinate", "UV", "Offset", "Vector"),
-    ("Nearest center", "Result_Vector", "Offset", "Vector_001"),
+    ("Texture Coordinate", "UV", "Eyeball offset", "Vector"),
+    ("Nearest center", "Result_Vector", "Eyeball offset", "Vector_001"),
+    ("Texture Coordinate", "UV", "Shell offset", "Vector"),
+    ("Shell offset", "Vector", "Shell distance", "Vector"),
+    ("Shell distance", "Value", "On shell", "Value"),
+    ("Shell offset", "Vector", "Shell out", "Vector"),
+    ("Shell offset", "Vector", "Shell up", "Vector"),
+    ("Shell out", "Value", "Shell scaled", "X"),
+    ("Shell up", "Value", "Shell scaled", "Y"),
+    ("On shell", "Value", "Offset", "Factor_Float"),
+    ("Eyeball offset", "Vector", "Offset", "A_Vector"),
+    ("Shell scaled", "Vector", "Offset", "B_Vector"),
     ("Group Input", "IrisSize", "Iris radius", "Value"),
     ("Iris radius", "Value", "Iris inverse", "Value_001"),
-    ("Offset", "Vector", "Iris local", "Vector"),
+    ("Offset", "Result_Vector", "Iris local", "Vector"),
     ("Iris inverse", "Value", "Iris local", "Scale"),
     ("Iris local", "Vector", "Iris r", "Vector"),
     ("Iris r", "Value", "Eye r", "Value"),
@@ -204,7 +239,9 @@ _GROUP_LINKS = [
     ("Tangent XYZ", "X", "Outward", "Value"),
     ("Position XYZ", "X", "Outward", "Value_001"),
     ("Outward", "Value", "Outward sign", "Value"),
-    ("Outward sign", "Value", "Catchlight X", "Value"),
+    ("On shell", "Value", "Outward side", "Factor_Float"),
+    ("Outward sign", "Value", "Outward side", "A_Float"),
+    ("Outward side", "Result_Float", "Catchlight X", "Value"),
     ("Catchlight X", "Value", "Catchlight center", "X"),
     ("Iris local", "Vector", "Catchlight offset", "Vector"),
     ("Catchlight center", "Vector", "Catchlight offset", "Vector_001"),
