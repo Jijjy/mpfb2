@@ -61,6 +61,12 @@ PRESETS = {
 SIMPLIFY_PASSES = 40  # Taubin passes; sets the scale of relief that counts as detail
 FACE_PASSES = 60  # the face pass reaches broader forms: whole lips, lids, the nose bridge
 DETAIL_T = 2.0e4  # lowpass4 strength: forms a few edges across go, ~30 edges across stay
+# The lids and sockets within EYE_HOLD eyeball radii of each eye centre are held out of the three
+# smoothing passes (face fill, face detail, body simplify). HM08's body is closed at the eye
+# sockets, so the passes' open-boundary hold never caught the eye openings: they rounded the lid
+# rim fold, which buried the lash roots in the lid and let the bigger eyeball through it (96Z9SL).
+EYE_HOLD = 1.5
+SOCKET_IN = 0.06  # share of the eyeball radius the socket's back wall comes in by (96Z9SL)
 
 LIMB = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
                   r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
@@ -318,11 +324,21 @@ def build(p0, faces, groups, weights, preset="default"):
 
     # Eye sockets and lids +12% about each eyeball centre; the eyeball helpers ride along (D6).
     # +12% is against the default adult, so the head's scale is divided out here.
-    for j, helper in (("joint-l-eye", "helper-l-eye"), ("joint-r-eye", "helper-r-eye")):
+    eyes = (("joint-l-eye", "helper-l-eye", "l"), ("joint-r-eye", "helper-r-eye", "r"))
+    for j, helper, sd in eyes:
         c = jc(j)
         r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
         r = np.linalg.norm(p - c, axis=1)
         p = scale_about(p, 1.0 - smoothstep(r_eye * 1.3, r_eye * 2.6, r), c, EYES / HEAD)
+        # The socket's back wall comes in by SOCKET_IN eyeball radii, so it stays as close behind
+        # the bigger eyeball as on HM08: scaled with it, the gap grew past 1 mm on narrow heads
+        # (96Z9SL, gender 0). Hidden behind the eyeball; the fit check counts that gap as Eyes_out.
+        r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
+        v = p - c
+        r = np.linalg.norm(v, axis=1)
+        w = smoothstep(0.0, r_eye * 0.5, -v[:, 2]) * (1.0 - smoothstep(r_eye * 1.2, r_eye * 1.6, r)) * \
+            np.isin(np.arange(len(p)), body)
+        p = p - (SOCKET_IN * r_eye * w / np.maximum(r, 1e-9))[:, None] * v
         # Rounder openings: the lids' height about the eye centre stretches (upper lid more than
         # the lower) and the width narrows, then each lid vertex goes back to its distance from
         # the centre, so the lid edge stays on the eyeball instead of lifting off it.
@@ -336,10 +352,19 @@ def build(p0, faces, groups, weights, preset="default"):
             wide = np.where(np.sign(v[:, 0]) == np.sign(c[0]), wide_out, wide_in)
             v2 = v * np.stack([wide, k, np.ones(len(p))], 1)
             v2 *= (r / np.maximum(np.linalg.norm(v2, axis=1), 1e-9))[:, None]
-            w = (1.0 - smoothstep(r_eye * 1.4, r_eye * 2.5, r)) * np.isin(np.arange(len(p)), body)
+            # The lash helpers take the same lift as the lid they sit on, so the lashes stay on the
+            # lid rim instead of crossing the opened eye (96Z9SL).
+            lids = np.r_[body, groups[f"helper-{sd}-eyelashes-1"], groups[f"helper-{sd}-eyelashes-2"]]
+            w = (1.0 - smoothstep(r_eye * 1.4, r_eye * 2.5, r)) * np.isin(np.arange(len(p)), lids)
             p = p + w[:, None] * (v2 - v)
         # Eyes sit closer to the face's front plane, so they stop reading as deep sockets.
         p[:, 2] += EYE_FORWARD * (1.0 - smoothstep(r_eye * 1.5, r_eye * 3.2, r))
+    eye_hold = np.zeros(len(p), bool)
+    for j, helper, _ in eyes:
+        c = jc(j)
+        r_eye = np.linalg.norm(p[groups[helper]] - c, axis=1).max()
+        eye_hold |= np.linalg.norm(p - c, axis=1) < EYE_HOLD * r_eye
+    smooth_body = body[~eye_hold[body]]
 
     # Nostril flare: remove FLATTEN of the relief left after smoothing. Ears are kept out: a
     # Laplacian flatten collapses the thin helix rim and leaves the concha as a hole (PRXJX2:
@@ -440,7 +465,7 @@ def build(p0, faces, groups, weights, preset="default"):
     # the face concave on PRXJX2. Filling only keeps every form at or in front of where it was.
     # The falloff fades out down the neck.
     if FACE_SIMPLIFY:
-        head = body[w_face[body] > 0.05]
+        head = smooth_body[w_face[smooth_body] > 0.05]
         n = vertex_normals(p, faces)
         out = np.maximum(((taubin_smooth(p, faces, head, FACE_PASSES) - p) * n).sum(1), 0.0)
         # The lips are kept out: filling the step under the nose left them no edge to read by in
@@ -454,7 +479,7 @@ def build(p0, faces, groups, weights, preset="default"):
     # broad face where it is (no dishing); the eye and mouth openings are held as boundaries, the
     # nose and lips are masked out so they keep their shape and push, ears go to the ear fill.
     if FACE_DETAIL:
-        head = body[w_face[body] > 0.05]
+        head = smooth_body[w_face[smooth_body] > 0.05]
         n = vertex_normals(p, faces)
         dn = ((lowpass4(p, faces, head, DETAIL_T) - p) * n).sum(1)
         keep = np.maximum(1.0 - smoothstep(0.12 * hs, 0.20 * hs, np.linalg.norm(p - nose_c, axis=1)),
@@ -480,7 +505,7 @@ def build(p0, faces, groups, weights, preset="default"):
     # folds, lip and lid creases) so the forms read as broad shapes (spec R1, R4). Helpers and
     # joint cubes are left alone.
     # Ears keep their rim (the face fill already took out the inner folds).
-    p = p + (SIMPLIFY * (1.0 - w_ear))[:, None] * (taubin_smooth(p, faces, body, SIMPLIFY_PASSES) - p)
+    p = p + (SIMPLIFY * (1.0 - w_ear))[:, None] * (taubin_smooth(p, faces, smooth_body, SIMPLIFY_PASSES) - p)
 
     # Keep the soles on the ground plane.
     p[:, 1] += p0[body, 1].min() - p[body, 1].min()
