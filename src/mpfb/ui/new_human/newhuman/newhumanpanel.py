@@ -35,6 +35,7 @@ class MPFB_PT_NewHuman_Panel(bpy.types.Panel):
             "detailed_helpers",
             "extra_vertex_groups",
             "mask_helpers",
+            "stylized_skin",
             "preselect_group"
             ])
         box.operator('mpfb.create_human')

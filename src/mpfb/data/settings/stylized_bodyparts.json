@@ -1,0 +1,6 @@
+{
+    "Teeth": {"base_color": [0.95, 0.94, 0.90], "roughness": 0.35},
+    "Tongue": {"base_color": "BloodTint", "roughness": 0.4},
+    "Eyebrows": {"base_color": [0.10, 0.07, 0.05]},
+    "Eyelashes": {"base_color": [0.03, 0.025, 0.02]}
+}

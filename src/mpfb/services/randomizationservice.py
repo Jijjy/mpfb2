@@ -57,7 +57,7 @@ _DEFAULT_SKIN_ASSET: dict = {
     "pack": "",
     "include": "",
     "exclude": "special_suit",
-    "skin_type": "MAKESKIN",
+    "skin_type": "STYLIZED",
     "material_instances": True
     }
 
@@ -93,7 +93,7 @@ _DEFAULT_HAIR_ASSET: dict = {
 # randomization is on by default.
 _DEFAULT_EYES_ASSET: dict = {
     "mode": "LOWPOLY",
-    "material_type": "MAKESKIN",
+    "material_type": "STYLIZED_EYES",
     "randomize_alt_materials": True
     }
 

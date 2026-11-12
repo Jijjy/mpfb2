@@ -4,6 +4,7 @@ import bpy
 from .....services import LogService
 from .....services import TargetService
 from .....services import HumanService
+from .....services.humanservice import NEW_HUMAN_SKIN_TYPE
 from .....services import SystemService
 from .....services import MeshService
 from ....mpfboperator import MpfbOperator
@@ -146,6 +147,10 @@ class MPFB_OT_CreateHumanOperator(MpfbOperator):
             self.report({'INFO'}, "Human created.")
 
         _LOG.debug("Basemesh", basemesh)
+
+        if ctx.stylized_skin:
+            # STYLIZED reads no skin file; shape and skin start out together (STYLIZED_SPEC.md 5.3, R2)
+            HumanService.set_character_skin(None, basemesh, skin_type=NEW_HUMAN_SKIN_TYPE, material_instances=False)
 
         # Otherwise all targets will be set to 100% when entering edit mode
         basemesh.use_shape_key_edit_mode = True

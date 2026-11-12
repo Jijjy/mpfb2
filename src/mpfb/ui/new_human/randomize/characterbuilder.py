@@ -203,7 +203,7 @@ def _apply_random_skin(report, spec, macro_details, basemesh, rng, discovery):
         report({'WARNING'}, "No matching skin was found; the human was created with the default material")
         return
 
-    skin_type = skin_cfg.get("skin_type", "MAKESKIN")
+    skin_type = skin_cfg.get("skin_type", "STYLIZED")
     material_instances = skin_cfg.get("material_instances", True)
     if skin_type in _NO_INSTANCE_SKIN_TYPES:
         material_instances = False
@@ -325,7 +325,7 @@ def _apply_random_eyes(report, eyes_cfg, basemesh, rng, subdiv_levels):
         report({'WARNING'}, "The selected eyes are not installed; no eyes were added")
         return
 
-    material_type = eyes_cfg.get("material_type", "MAKESKIN")
+    material_type = eyes_cfg.get("material_type", "STYLIZED_EYES")
     alternative_materials = None
     if eyes_cfg.get("randomize_alt_materials", True) and material_type not in ("PROCEDURAL_EYES", "STYLIZED_EYES"):
         alternative_materials = _pick_alternative_material(report, path, "eyes", rng)

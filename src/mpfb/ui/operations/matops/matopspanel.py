@@ -39,10 +39,14 @@ class MPFB_PT_MatopsPanel(Abstract_Panel):
         layout = self.layout
         scene = context.scene
 
-        self.create_box(layout, "Look development").operator("mpfb.stylized_studio")
+        box = self.create_box(layout, "Look development")
+        box.operator("mpfb.stylized_studio")
 
         if context.active_object is None:
             return
+
+        if ObjectService.find_object_of_type_amongst_nearest_relatives(context.active_object) is not None:
+            box.operator("mpfb.make_stylized")
 
         objtype = ObjectService.get_object_type(context.active_object)
 

@@ -29,6 +29,15 @@ _LOG = LogService.get_logger("services.humanservice")
 STYLIZATION_TARGET = "stylized-default"
 """The stylization slider's target (data/targets/stylization). A new human gets it at 1.0, see create_human."""
 
+NEW_HUMAN_SKIN_TYPE = "STYLIZED"
+"""The skin type a new human gets (STYLIZED_SPEC.md 5.3). Presets and .mhm files that name one keep theirs."""
+
+NEW_HUMAN_EYES_MATERIAL_TYPE = "STYLIZED_EYES"
+"""The eye material a new human's eyes get (STYLIZED_SPEC.md 5.3)."""
+
+_STYLIZED_BODYPARTS_FILE = "stylized_bodyparts.json"
+"""The recolour presets for the stock teeth, tongue, eyebrows and eyelashes, in data/settings."""
+
 _EXISTING_PRESETS: list[str] | None = None
 """The cached names of the stored character presets, or None until the first scan."""
 
@@ -658,12 +667,8 @@ class HumanService:
             blender_material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
 
         if material_type == "STYLIZED_EYES":
-            # One opaque Principled BSDF, no transmission shell, no alpha blend (STYLIZED_SPEC.md 5.2)
-            from ..entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
-            MaterialService.delete_all_materials(clothes)
-            _LOG.debug("Setting up stylized eyes")
-            blender_material = MaterialService.create_empty_material(name, clothes)
-            NodeWrapperStylizedEyes.create_instance(typing.cast(bpy.types.NodeTree, blender_material.node_tree))
+            HumanService.set_stylized_eyes_material(clothes, name)
+            blender_material = MaterialService.get_material(clothes)
             blender_material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
 
         ClothesService.fit_clothes_to_human(clothes, basemesh, mhclo)
@@ -702,6 +707,116 @@ class HumanService:
             subsurf.render_levels = subdiv_levels
 
         return clothes
+
+    @staticmethod
+    def set_stylized_eyes_material(eyes: bpy.types.Object, name: str | None = None) -> bpy.types.Material:
+        """
+        Replace the materials of an eyes object with one STYLIZED_EYES material: one opaque Principled
+        BSDF, no transmission shell, no alpha blend (STYLIZED_SPEC.md 5.2).
+
+        Args:
+            eyes (bpy.types.Object): The eyes object.
+            name (str | None): The material name. Default is the object's name.
+
+        Returns:
+            bpy.types.Material: The new material.
+        """
+        from ..entities.nodemodel.v2.materials.nodewrapperstylizedeyes import NodeWrapperStylizedEyes
+        MaterialService.delete_all_materials(eyes)
+        _LOG.debug("Setting up stylized eyes")
+        blender_material = MaterialService.create_empty_material(name or eyes.name, eyes)
+        NodeWrapperStylizedEyes.create_instance(typing.cast(bpy.types.NodeTree, blender_material.node_tree))
+        return blender_material
+
+    @staticmethod
+    def get_stylized_bodypart_presets() -> dict[str, dict[str, Any]]:
+        """
+        The recolour presets for the stock bodyparts, keyed by object type ("Teeth", "Tongue", "Eyebrows",
+        "Eyelashes"). "base_color" is an sRGB triple, or "BloodTint" for the body's stylized blood tint.
+        """
+        path = os.path.join(LocationService.get_mpfb_data("settings"), _STYLIZED_BODYPARTS_FILE)
+        with open(path, "r", encoding="utf-8") as json_file:
+            return json.load(json_file)
+
+    @staticmethod
+    def recolour_stylized_bodyparts(basemesh: bpy.types.Object) -> list[bpy.types.Object]:
+        """
+        Recolour the human's teeth, tongue, eyebrows and eyelashes from the stylized presets
+        (STYLIZED_SPEC.md 5.3): the Principled BSDF's Base Color is unlinked from its texture and set to the
+        preset's flat colour. Alpha and every other input are kept, so brows and lashes keep their cut-out.
+        No mesh is added or changed.
+
+        Args:
+            basemesh (bpy.types.Object): The human's basemesh.
+
+        Returns:
+            list[bpy.types.Object]: The objects that were recoloured.
+        """
+        from ..entities.nodemodel.v2.materials.nodewrapperstylizedskin import BLOOD_TINT_SRGB, STYLIZED_SKIN_MARKER_KEY, srgb_to_linear
+
+        blood_tint = list(srgb_to_linear(BLOOD_TINT_SRGB)) + [1.0]
+        skin = MaterialService.get_material(basemesh) if MaterialService.has_materials(basemesh) else None
+        if skin and skin.node_tree:
+            group_node = NodeService.find_first_node_by_type_name(skin.node_tree, "ShaderNodeGroup")
+            if group_node:
+                values = NodeService.get_socket_default_values(group_node)
+                if STYLIZED_SKIN_MARKER_KEY in values:
+                    blood_tint = list(values[STYLIZED_SKIN_MARKER_KEY])
+
+        recoloured = []
+        for object_type, preset in HumanService.get_stylized_bodypart_presets().items():
+            bodypart = ObjectService.find_object_of_type_amongst_nearest_relatives(basemesh, object_type)
+            if not bodypart or not MaterialService.has_materials(bodypart):
+                continue
+            material = bodypart.material_slots[0].material
+            if not material or not material.node_tree:
+                continue
+            if material.users > 1:
+                # Shared with another object: recolour a copy, never someone else's teeth
+                material = material.copy()
+                bodypart.material_slots[0].material = material
+            principled = NodeService.find_first_node_by_type_name(material.node_tree, "ShaderNodeBsdfPrincipled")
+            if not principled:
+                _LOG.warn("No Principled BSDF in the material, not recolouring", (bodypart.name, material.name))
+                continue
+            if preset["base_color"] == "BloodTint":
+                color = blood_tint
+            else:
+                color = list(srgb_to_linear(preset["base_color"])) + [1.0]
+            base_color = principled.inputs["Base Color"]
+            for link in list(base_color.links):
+                material.node_tree.links.remove(link)
+            base_color.default_value = color  # pyright: ignore[reportAttributeAccessIssue]
+            if "roughness" in preset:
+                roughness = principled.inputs["Roughness"]
+                for link in list(roughness.links):
+                    material.node_tree.links.remove(link)
+                roughness.default_value = preset["roughness"]  # pyright: ignore[reportAttributeAccessIssue]
+            material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
+            recoloured.append(bodypart)
+        return recoloured
+
+    @staticmethod
+    def make_stylized(basemesh: bpy.types.Object) -> None:
+        """
+        Make an existing character stylized in one step (STYLIZED_SPEC.md 5.3, R2): stylization 1.0, the
+        STYLIZED skin on the body and its proxy, STYLIZED_EYES on the eyes, and the stylized recolour of
+        the teeth, tongue, eyebrows and eyelashes. Shape, skin and eyes change together. When the
+        stylization changes, the mesh assets and the rig are refitted to the new shape.
+
+        Args:
+            basemesh (bpy.types.Object): The human's basemesh.
+        """
+        if HumanService.get_stylization(basemesh) != 1.0:
+            HumanService.set_stylization(basemesh, 1.0)
+            # The eyes, brows, clothes and rig were fitted to the old shape
+            HumanService.refit(basemesh)
+        bodyproxy = ObjectService.find_object_of_type_amongst_nearest_relatives(basemesh, "Proxymeshes")
+        HumanService.set_character_skin(None, basemesh, bodyproxy=bodyproxy, skin_type=NEW_HUMAN_SKIN_TYPE, material_instances=False)
+        eyes = ObjectService.find_object_of_type_amongst_nearest_relatives(basemesh, "Eyes")
+        if eyes:
+            HumanService.set_stylized_eyes_material(eyes)
+        HumanService.recolour_stylized_bodyparts(basemesh)
 
     @staticmethod
     def _check_add_rig(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:

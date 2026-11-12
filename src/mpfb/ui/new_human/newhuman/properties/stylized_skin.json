@@ -1,0 +1,7 @@
+{
+    "type": "boolean",
+    "name": "stylized_skin",
+    "description": "Give the new human the stylized skin (STYLIZED_SPEC.md 5.3). Eyes added later get the stylized eye material by default",
+    "label": "Stylized skin",
+    "default": true
+}

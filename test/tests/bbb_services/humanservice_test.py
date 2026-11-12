@@ -7,6 +7,7 @@ from .. import FaceService
 from .. import ObjectService
 from .. import HumanService
 from .. import MaterialService
+from .. import NodeService
 from .. import LocationService
 from .. import RigService
 from .. import SystemService
@@ -676,3 +677,60 @@ def test_serialize_human_with_generated_rigify_human_toes_infers_human_toes():
         assert rig == "rigify.human_toes", f"Expected 'rigify.human_toes', got {rig!r}"
     finally:
         _cleanup_named_with_relatives(basemesh_name)
+
+
+def test_make_stylized_sets_shape_skin_eyes_and_recolours():
+    """HumanService.make_stylized() -- new-human defaults are stylized; the operator sets stylization, skin and eyes together"""
+    NEW_HUMAN_SKIN_TYPE = dynamic_import("mpfb.services.humanservice", "NEW_HUMAN_SKIN_TYPE")
+    NEW_HUMAN_EYES_MATERIAL_TYPE = dynamic_import("mpfb.services.humanservice", "NEW_HUMAN_EYES_MATERIAL_TYPE")
+    assert NEW_HUMAN_SKIN_TYPE == "STYLIZED"
+    assert NEW_HUMAN_EYES_MATERIAL_TYPE == "STYLIZED_EYES"
+    ui = LocationService.get_mpfb_root("ui")
+    for rel, expected in [("apply_assets/assetlibrary/properties/skin_type.json", NEW_HUMAN_SKIN_TYPE),
+                          ("apply_assets/assetlibrary/properties/eyes_type.json", NEW_HUMAN_EYES_MATERIAL_TYPE),
+                          ("new_human/randomize/properties/skin_type.json", NEW_HUMAN_SKIN_TYPE),
+                          ("new_human/randomize/properties/eyes_material_type.json", NEW_HUMAN_EYES_MATERIAL_TYPE)]:
+        with open(os.path.join(ui, rel), "r", encoding="utf-8") as json_file:
+            assert json.load(json_file)["default"] == expected, rel
+    with open(os.path.join(ui, "new_human/newhuman/properties/stylized_skin.json"), "r", encoding="utf-8") as json_file:
+        assert json.load(json_file)["default"] is True
+
+    stock = {name: AssetService.find_asset_absolute_path(fragment, name.lower()) for name, fragment in
+             [("Eyes", "low-poly/low-poly.mhclo"), ("Teeth", "teeth_base/teeth_base.mhclo"),
+              ("Tongue", "tongue01/tongue01.mhclo"), ("Eyebrows", "eyebrow001/eyebrow001.mhclo")]}
+    if None in stock.values():
+        pytest.skip("the stock eyes, teeth, tongue and eyebrows are not installed")
+    basemesh = HumanService.create_human(stylization=0.0)
+    HumanService.set_character_skin(None, basemesh, skin_type="LAYERED")
+    added = {name: HumanService.add_mhclo_asset(path, basemesh, asset_type=name, set_up_rigging=False, interpolate_weights=False,
+                                                import_subrig=False, import_weights=False)
+             for name, path in stock.items()}
+    eyes = added.pop("Eyes")
+    parts = added
+    for name, part in parts.items():
+        principled = MaterialService.get_material(part).node_tree.nodes["Principled BSDF"]
+        assert principled.inputs["Base Color"].is_linked, name + " reads its diffuse texture before"
+    eye_vertex_before = eyes.data.vertices[0].co.copy()
+    try:
+        HumanService.make_stylized(basemesh)
+        assert HumanService.get_stylization(basemesh) == approx(1.0)
+        assert (eyes.data.vertices[0].co - eye_vertex_before).length > 1e-4, "the eyes were refitted to the stylized shape"
+        assert MaterialService.identify_material(MaterialService.get_material(basemesh)) == "stylized_skin"
+        assert MaterialService.identify_material(MaterialService.get_material(eyes)) == "stylized_eyes"
+        presets = HumanService.get_stylized_bodypart_presets()
+        skin = MaterialService.get_material(basemesh)
+        blood_tint = list(NodeService.get_socket_default_values(NodeService.find_first_node_by_type_name(skin.node_tree, "ShaderNodeGroup"))["BloodTint"])
+        for name, part in parts.items():
+            node = MaterialService.get_material(part).node_tree.nodes["Principled BSDF"]
+            assert not node.inputs["Base Color"].is_linked, name
+            color = list(node.inputs["Base Color"].default_value)
+            if presets[name]["base_color"] == "BloodTint":
+                assert color == approx(blood_tint, abs=1e-5), name
+            else:
+                assert color[0] == approx(((presets[name]["base_color"][0] + 0.055) / 1.055) ** 2.4, abs=1e-5), name
+        assert MaterialService.get_material(parts["Eyebrows"]).node_tree.nodes["Principled BSDF"].inputs["Alpha"].is_linked, \
+            "brows keep their alpha cut-out"
+    finally:
+        for obj in [eyes] + list(parts.values()) + [basemesh]:
+            ObjectService.delete_object(obj)
+
