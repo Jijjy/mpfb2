@@ -697,7 +697,8 @@ def test_make_stylized_sets_shape_skin_eyes_and_recolours():
 
     stock = {name: AssetService.find_asset_absolute_path(fragment, name.lower()) for name, fragment in
              [("Eyes", "low-poly/low-poly.mhclo"), ("Teeth", "teeth_base/teeth_base.mhclo"),
-              ("Tongue", "tongue01/tongue01.mhclo"), ("Eyebrows", "eyebrow001/eyebrow001.mhclo")]}
+              ("Tongue", "tongue01/tongue01.mhclo"), ("Eyebrows", "eyebrow001/eyebrow001.mhclo"),
+              ("Eyelashes", "eyelashes01/eyelashes01.mhclo")]}
     if None in stock.values():
         pytest.skip("the stock eyes, teeth, tongue and eyebrows are not installed")
     basemesh = HumanService.create_human(stylization=0.0)
@@ -727,9 +728,13 @@ def test_make_stylized_sets_shape_skin_eyes_and_recolours():
             if presets[name]["base_color"] == "BloodTint":
                 assert color == approx(blood_tint, abs=1e-5), name
             else:
-                assert color[0] == approx(((presets[name]["base_color"][0] + 0.055) / 1.055) ** 2.4, abs=1e-5), name
-        assert MaterialService.get_material(parts["Eyebrows"]).node_tree.nodes["Principled BSDF"].inputs["Alpha"].is_linked, \
-            "brows keep their alpha cut-out"
+                srgb = presets[name]["base_color"][0]
+                linear = srgb / 12.92 if srgb <= 0.04045 else ((srgb + 0.055) / 1.055) ** 2.4
+                assert color[0] == approx(linear, abs=1e-5), name
+        for name, texture in (("Eyebrows", "sty_brow.png"), ("Eyelashes", "sty_lash.png")):
+            alpha = MaterialService.get_material(parts[name]).node_tree.nodes["Principled BSDF"].inputs["Alpha"]
+            assert alpha.is_linked, name + " keeps an alpha cut-out"
+            assert os.path.basename(alpha.links[0].from_node.image.filepath) == texture, name + " cuts out the stylized shape"
     finally:
         for obj in [eyes] + list(parts.values()) + [basemesh]:
             ObjectService.delete_object(obj)

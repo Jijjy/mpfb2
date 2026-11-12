@@ -733,6 +733,8 @@ class HumanService:
         """
         The recolour presets for the stock bodyparts, keyed by object type ("Teeth", "Tongue", "Eyebrows",
         "Eyelashes"). "base_color" is an sRGB triple, or "BloodTint" for the body's stylized blood tint.
+        "alpha_texture" (optional) names a texture in data/textures that replaces the cut-out image when the
+        image feeding Alpha is "replaces", the stock card it was painted for.
         """
         path = os.path.join(LocationService.get_mpfb_data("settings"), _STYLIZED_BODYPARTS_FILE)
         with open(path, "r", encoding="utf-8") as json_file:
@@ -744,7 +746,9 @@ class HumanService:
         Recolour the human's teeth, tongue, eyebrows and eyelashes from the stylized presets
         (STYLIZED_SPEC.md 5.3): the Principled BSDF's Base Color is unlinked from its texture and set to the
         preset's flat colour. Alpha and every other input are kept, so brows and lashes keep their cut-out.
-        No mesh is added or changed.
+        On the stock eyebrow001 and eyelashes01 cards the cut-out image becomes the preset's
+        "alpha_texture": a solid brow and one solid lash wing, so brows, lashes and hair read as one flat
+        style. Other brow and lash assets keep their own cut-out. No mesh is added or changed.
 
         Args:
             basemesh (bpy.types.Object): The human's basemesh.
@@ -792,9 +796,28 @@ class HumanService:
                 for link in list(roughness.links):
                     material.node_tree.links.remove(link)
                 roughness.default_value = preset["roughness"]  # pyright: ignore[reportAttributeAccessIssue]
+            if "alpha_texture" in preset:
+                HumanService._swap_stylized_alpha_texture(material, principled, preset)
             material.diffuse_color = color  # pyright: ignore[reportAttributeAccessIssue]
             recoloured.append(bodypart)
         return recoloured
+
+    @staticmethod
+    def _swap_stylized_alpha_texture(material: bpy.types.Material, principled: bpy.types.Node, preset: dict[str, Any]) -> None:
+        """Point the image node feeding the Principled BSDF's Alpha at the preset's alpha_texture, when that
+        node shows the stock image the texture was painted for (its UVs are that card's)."""
+        for link in principled.inputs["Alpha"].links:
+            node = link.from_node
+            image = getattr(node, "image", None)
+            if node.type != "TEX_IMAGE" or image is None:
+                continue
+            current = os.path.basename(image.filepath or image.name)
+            if current == preset["alpha_texture"]:
+                continue
+            if current != preset["replaces"]:
+                _LOG.debug("Not the stock card, keeping its cut-out", (material.name, current))
+                continue
+            NodeService.set_image_in_image_node(node, os.path.join(LocationService.get_mpfb_data("textures"), preset["alpha_texture"]))  # pyright: ignore[reportArgumentType]
 
     @staticmethod
     def make_stylized(basemesh: bpy.types.Object) -> None:

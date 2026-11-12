@@ -5,7 +5,7 @@
 
 For gender 0/1 x age young/old x weight min/max and stylization 0, 0.5, 1: a full human through
 HumanService (default rig, clothes, shoes, hair, high-poly eyes, eyebrows, eyelashes, teeth), posed
-(arms raised, elbows, hip and knee bent, head nodded and turned), rendered in Workbench (lashes through their alpha texture) front, face and eye, and
+(arms raised, elbows, hip and knee bent, head nodded and turned), rendered in Workbench (lashes and brows through the stylized alpha textures) front, face and eye, and
 measured. Eyes_out: eyeball vertices outside the skin that still have skin in front of them (pushed
 through a lid); the plain Eyes share rises with lid coverage of a bigger eyeball and is not clipping
 by itself. Clipping metric per asset: share of its posed vertices more than 2 mm inside the posed
@@ -129,12 +129,13 @@ COLORS = {"Clothes": (0.35, 0.55, 0.75, 1), "Shoes": (0.25, 0.25, 0.25, 1), "Hai
           "Teeth": (1.0, 0.2, 0.2, 1)}
 
 
-LASH_PNG = asset("eyelashes/eyelashes01/eyelashes01.png")
+TEXTURES = os.path.join(data, "textures")
+ALPHA_PNG = {"Eyelashes": os.path.join(TEXTURES, "sty_lash.png"), "Eyebrows": os.path.join(TEXTURES, "sty_brow.png")}
 
 
 def flat(obj, color, alpha_png=None):
     """One flat-colour material on obj. With alpha_png the colour is masked by that image's alpha (clip),
-    so lash cards draw as lashes, not as solid bands standing off the lid. Workbench TEXTURE mode draws the
+    so lash and brow cards draw as the stylized wing and brow, not as solid bands standing off the lid. Workbench TEXTURE mode draws the
     image (its own dark lash colour) where a material has one, else the material's diffuse colour."""
     mat = bpy.data.materials.new(obj.name + "_fit")
     mat.diffuse_color = color
@@ -166,7 +167,7 @@ for name, g, age, w in corners():
         zmax = max(v.z for v in verts)
         flat(body, (0.85, 0.62, 0.48, 1))
         for k, o in parts.items():
-            flat(o, COLORS[k], LASH_PNG if k == "Eyelashes" else None)
+            flat(o, COLORS[k], ALPHA_PNG.get(k))
         ev, _ = posed_world(parts["Eyes"])
         eye_l = [v for v in ev if v.x > 0]
         eye = sum(eye_l, ev[0] * 0) / len(eye_l)
