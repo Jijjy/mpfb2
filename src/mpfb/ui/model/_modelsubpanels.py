@@ -9,6 +9,7 @@ from ...services import ObjectService
 from ...services import TargetService
 from ...services import AssetService
 from ...services import HumanService
+from ...services.humanservice import STYLIZATION_TARGET
 from ...services import UiService
 from ..abstractpanel import Abstract_Panel
 
@@ -66,7 +67,10 @@ class _Abstract_Model_Panel(Abstract_Panel):
         is_modified = False
         for target in category["targets"]:
             name = str(os.path.basename(target)).replace(".target", "")
-            value = TargetService.get_target_value(basemesh, name)
+            if name == STYLIZATION_TARGET:
+                value = HumanService.get_stylization(basemesh)
+            else:
+                value = TargetService.get_target_value(basemesh, name)
             if abs(value) > 0.001:
                 is_modified = True
                 _LOG.trace("Target value considered modified", (name, value))
@@ -242,6 +246,12 @@ def _set_simple_modifier_value(scene, blender_object, section, category, value, 
         name = "r-" + name
     if side == "left":
         name = "l-" + name
+    if name == STYLIZATION_TARGET:
+        # The slider is stored on the human; the shape key gets it times the age factor
+        from ..model.modelpanel import MODEL_PROPERTIES
+        prune = MODEL_PROPERTIES.get_value("prune", entity_reference=bpy.context.scene)
+        HumanService.set_stylization(blender_object, value, delete_target_on_zero=prune)
+        return
     if not TargetService.has_target(blender_object, name):
         if "full_path" in category:
             target_path = category["full_path"]
@@ -265,6 +275,8 @@ def _get_simple_modifier_value(scene, blender_object, section, category, side="u
         name = "r-" + name
     if side == "left":
         name = "l-" + name
+    if name == STYLIZATION_TARGET:
+        return HumanService.get_stylization(blender_object)
     return TargetService.get_target_value(blender_object, name)
 
 def _get_opposed_modifier_value(scene, blender_object, section, category, side="unsided"):

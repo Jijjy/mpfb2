@@ -331,6 +331,42 @@ def test_create_human_stylization_zero_is_plain():
     assert vertical.max() - vertical.min() < 1e-6
 
 
+def test_stylization_fades_with_age():
+    """HumanService -- stylized-default weight is slider x age factor: 1 young, 0.5 child, 0 baby, recomputed on age change"""
+    HumanObjectProperties = dynamic_import("mpfb.entities.objectproperties", "HumanObjectProperties")
+    expected = {0.5: 1.0, 0.1875: 0.5, 0.0: 0.0}
+    for age, weight in expected.items():
+        macro = TargetService.get_default_macro_info_dict()
+        macro["age"] = age
+        basemesh = HumanService.create_human(macro_detail_dict=macro)
+        assert HumanService.get_stylization(basemesh) == approx(1.0)
+        assert TargetService.get_target_value(basemesh, "stylized-default") == approx(weight), "age " + str(age)
+        ObjectService.delete_object(basemesh)
+
+    # Age changes on an existing human: baby -> child -> young -> baby, the slider stays at 0.8
+    macro = TargetService.get_default_macro_info_dict()
+    macro["age"] = 0.0
+    basemesh = HumanService.create_human(macro_detail_dict=macro, stylization=0.8)
+    assert not TargetService.has_target(basemesh, "stylized-default")
+    for age, weight in [(0.1875, 0.4), (0.5, 0.8), (0.0, 0.0)]:
+        HumanObjectProperties.set_value("age", age, entity_reference=basemesh)
+        HumanService.apply_stylization_age_fade(basemesh)
+        assert TargetService.get_target_value(basemesh, "stylized-default") == approx(weight), "age " + str(age)
+    assert HumanService.get_stylization(basemesh) == approx(0.8)
+
+    # A saved baby keeps its slider, and loads faded again
+    human_info = json.loads(HumanService.serialize_to_json_string(basemesh))
+    assert {"target": "stylized-default", "value": approx(0.8)} in human_info["targets"]
+    ObjectService.delete_object(basemesh)
+    human_info["phenotype"]["age"] = 0.1875
+    deser = HumanService.get_default_deserialization_settings()
+    deser["load_clothes"] = False
+    loaded = HumanService.deserialize_from_dict(human_info, deser)
+    assert HumanService.get_stylization(loaded) == approx(0.8)
+    assert TargetService.get_target_value(loaded, "stylized-default") == approx(0.4)
+    ObjectService.delete_object(loaded)
+
+
 def test_deserialize_from_mhm_without_stylization_loads_at_zero():
     """HumanService.deserialize_from_mhm() -- an .mhm without the stylization key is not stylized"""
     deser = HumanService.get_default_deserialization_settings()

@@ -254,7 +254,13 @@ class HumanService:
     def _populate_human_info_with_basemesh_info(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:
         _LOG.enter()
         human_info["phenotype"] = TargetService.get_macro_info_dict_from_basemesh(basemesh)
-        human_info["targets"] = TargetService.get_target_stack(basemesh, exclude_starts_with=("$md-", "!ex-"))
+        targets = [entry for entry in TargetService.get_target_stack(basemesh, exclude_starts_with=("$md-", "!ex-"))
+                   if entry["target"] != STYLIZATION_TARGET]
+        # Save the slider, not the faded shape key value, so a child keeps its setting when aged up.
+        stylization = HumanService.get_stylization(basemesh)
+        if stylization > 0.0:
+            targets.append({"target": STYLIZATION_TARGET, "value": stylization})
+        human_info["targets"] = targets
 
     @staticmethod
     def _populate_human_info_with_expression_info(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:
@@ -1029,6 +1035,55 @@ class HumanService:
             _LOG.warn("Material had no group node -> neither procedural nor stylized eyes")
 
     @staticmethod
+    def stylization_age_factor(age: float) -> float:
+        """
+        How much of the Stylization slider a human of the given macro age gets (STYLIZED_SPEC.md 4.3):
+        1 at young (0.5) and older, 0.5 at child (0.1875), 0 at baby (0.0), linear in between.
+        Children already have large eyes and heads, so the target would over-shoot on them.
+        """
+        if age >= 0.5:
+            return 1.0
+        if age >= 0.1875:
+            return 0.5 + 0.5 * (age - 0.1875) / (0.5 - 0.1875)
+        return max(0.0, 0.5 * age / 0.1875)
+
+    @staticmethod
+    def get_stylization(basemesh: bpy.types.Object) -> float:
+        """
+        The Stylization slider value of the human, before the age fade. A human made before the fade
+        existed has no stored value; its stylized-default shape key value is the slider.
+        """
+        value = HumanObjectProperties.get_value("stylization", entity_reference=basemesh)
+        if value is None or value < 0.0:
+            return TargetService.get_target_value(basemesh, STYLIZATION_TARGET)
+        return float(value)
+
+    @staticmethod
+    def set_stylization(basemesh: bpy.types.Object, value: float, delete_target_on_zero: bool = True) -> None:
+        """
+        Set the Stylization slider of the human and put slider x age factor on the stylized-default shape
+        key (STYLIZED_SPEC.md 4.3). The target is only loaded once the effective weight is above zero.
+        """
+        HumanObjectProperties.set_value("stylization", float(value), entity_reference=basemesh)
+        HumanService.apply_stylization_age_fade(basemesh, delete_target_on_zero=delete_target_on_zero)
+
+    @staticmethod
+    def apply_stylization_age_fade(basemesh: bpy.types.Object, delete_target_on_zero: bool = True) -> None:
+        """
+        Recompute the stylized-default shape key from the stored slider value and the current age.
+        Call after the age macro changes.
+        """
+        slider = HumanService.get_stylization(basemesh)
+        # A human from before the fade gets its slider stored now, so the fade does not compound.
+        HumanObjectProperties.set_value("stylization", float(slider), entity_reference=basemesh)
+        age = HumanObjectProperties.get_value("age", entity_reference=basemesh)
+        weight = slider * HumanService.stylization_age_factor(float(age))
+        if TargetService.has_target(basemesh, STYLIZATION_TARGET):
+            TargetService.set_target_value(basemesh, STYLIZATION_TARGET, weight, delete_target_on_zero=delete_target_on_zero)
+        elif weight > 0.0:
+            TargetService.bulk_load_targets(basemesh, [{"target": STYLIZATION_TARGET, "value": weight}])
+
+    @staticmethod
     def _load_targets(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:
         profiler = PrimitiveProfiler("HumanService")
         profiler.enter("_load_targets")
@@ -1036,7 +1091,16 @@ class HumanService:
         if not "targets" in human_info:
             profiler.leave("_load_targets")
             return
-        TargetService.bulk_load_targets(basemesh, human_info["targets"])
+        # The stylization entry is the slider value; the shape key gets it times the age factor.
+        stylization = 0.0
+        targets = []
+        for entry in human_info["targets"]:
+            if entry["target"] == STYLIZATION_TARGET:
+                stylization = float(entry["value"])
+            else:
+                targets.append(entry)
+        TargetService.bulk_load_targets(basemesh, targets)
+        HumanService.set_stylization(basemesh, stylization)
 
         profiler.leave("_load_targets")
 
@@ -1588,8 +1652,9 @@ class HumanService:
             feet_on_ground (bool): Whether to position the feet on the ground. Default is True.
             scale (float): The scale factor for the basemesh. Default is 0.1.
             macro_detail_dict (MacroInfo | None): A dictionary containing macro detail settings. If None, default settings are used.
-            stylization (float): Weight of the stylized-default target, 0 to 1. Default is 1.0. At 0 the target is
-                not loaded at all, so the mesh is the plain one.
+            stylization (float): The Stylization slider, 0 to 1. Default is 1.0. The stylized-default target gets
+                it times the age factor (see set_stylization). At 0 the target is not loaded at all, so the mesh
+                is the plain one.
 
         Returns:
             bpy.types.Object: The created human basemesh object.
@@ -1629,8 +1694,7 @@ class HumanService:
 
         TargetService.reapply_macro_details(basemesh)
 
-        if stylization > 0.0:
-            TargetService.bulk_load_targets(basemesh, [{"target": STYLIZATION_TARGET, "value": stylization}])
+        HumanService.set_stylization(basemesh, stylization)
 
         if mask_helpers:
             mask = typing.cast(bpy.types.MaskModifier, basemesh.modifiers.new("Hide helpers", 'MASK'))
