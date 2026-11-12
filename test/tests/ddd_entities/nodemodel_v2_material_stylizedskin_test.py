@@ -36,6 +36,8 @@ def test_stylized_skin_shader():
     for name in ["BloodMap", "CavityMap", "RoughnessMask", "Makeup", "MakeupAlpha"]:
         image_node = group_node.inputs[name].links[0].from_node
         assert image_node.bl_idname == "ShaderNodeTexImage" and image_node.image is not None
+        if name in ("BloodMap", "CavityMap", "RoughnessMask"):  # the painted/baked maps, not placeholders
+            assert tuple(image_node.image.size) == (1024, 1024), name
 
     group_nodes = group_node.node_tree.nodes
     assert [node.bl_idname for node in group_nodes].count("ShaderNodeBsdfPrincipled") == 1

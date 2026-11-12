@@ -21,9 +21,9 @@ group's map inputs:
 - Normal: none. No normal map, no micro-normal, no pore noise (spec R1).
 - Makeup: an optional sRGB decal mixed over the albedo by its alpha.
 
-The textures come from data/textures/sty_*.png, laid out in HM08's UVs. Until the painted maps land
-they are neutral placeholders: no blood, no cavity, roughness 0.55 everywhere, no makeup.
-HM08's mpfb_* region textures are not read.
+The textures come from data/textures/sty_*.png, 1024² and laid out in HM08's UVs. tools/hm08/make_sty_maps.py
+makes the BloodMap, CavityMap and roughness mask from the HM08 base mesh with stylized-default at 1.0;
+sty_makeup_none.png is an empty (transparent) decal. HM08's mpfb_* region textures are not read.
 """
 
 import json, os
@@ -49,9 +49,6 @@ BLOOD_TINT_SRGB = [0.85, 0.35, 0.30]
 # 0.5 cm in metres: the subsurface radius scale for a human at scale factor 0.1 (one unit = 1 m)
 SUBSURFACE_SCALE_METERS = 0.005
 
-# TODO(grind): the four sty_*.png files are 64x64 neutral placeholders (HSJ3YU). The texture ticket
-# paints sty_bloodmap.png (1024², HM08 UVs), bakes sty_cavity.png (AO of the HM08 base mesh) and
-# paints the roughness mask (body 0.75, face 0.5, lips 0.0) under the same names.
 # The textures, by image node name: (file name in data/textures, colour space, group input fed by
 # the Color output, group input fed by the Alpha output)
 TEXTURES = {
