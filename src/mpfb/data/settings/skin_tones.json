@@ -1,0 +1,17 @@
+{
+    "color_space": "sRGB",
+    "swatches": [
+        {"name": "Porcelain", "color": [0.96, 0.84, 0.76]},
+        {"name": "Ivory", "color": [0.93, 0.78, 0.67]},
+        {"name": "Fair", "color": [0.89, 0.72, 0.60]},
+        {"name": "Light", "color": [0.84, 0.66, 0.54]},
+        {"name": "Default", "color": [0.80, 0.60, 0.48]},
+        {"name": "Beige", "color": [0.76, 0.56, 0.42]},
+        {"name": "Tan", "color": [0.70, 0.50, 0.36]},
+        {"name": "Olive", "color": [0.64, 0.48, 0.32]},
+        {"name": "Caramel", "color": [0.56, 0.39, 0.26]},
+        {"name": "Brown", "color": [0.46, 0.31, 0.21]},
+        {"name": "Deep brown", "color": [0.36, 0.24, 0.16]},
+        {"name": "Ebony", "color": [0.26, 0.17, 0.12]}
+    ]
+}

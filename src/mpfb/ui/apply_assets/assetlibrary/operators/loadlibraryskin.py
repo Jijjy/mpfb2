@@ -36,7 +36,7 @@ class MPFB_OT_Load_Library_Skin_Operator(MpfbOperator):
         basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(blender_object, "Basemesh")
         bodyproxy = ObjectService.find_object_of_type_amongst_nearest_relatives(blender_object, "Proxymeshes")
 
-        if ctx.skin_type in ["LAYERED", "GAMEENGINE", "MAKESKIN"]:
+        if ctx.skin_type in ["LAYERED", "GAMEENGINE", "MAKESKIN", "STYLIZED"]:
             material_instances = False
 
         HumanService.set_character_skin(self.filepath, basemesh, bodyproxy=bodyproxy, skin_type=ctx.skin_type, material_instances=material_instances,

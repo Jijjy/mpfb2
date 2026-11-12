@@ -36,7 +36,7 @@ _SCALE_BY_FACTOR = {"METER": 0.1, "DECIMETER": 1.0, "CENTIMETER": 10.0}
 
 # Skin types for which material instances are always forced off, mirroring the asset
 # library's load-skin operator.
-_NO_INSTANCE_SKIN_TYPES = ["LAYERED", "GAMEENGINE", "MAKESKIN"]
+_NO_INSTANCE_SKIN_TYPES = ["LAYERED", "GAMEENGINE", "MAKESKIN", "STYLIZED"]
 
 # The eyes are not randomized from a pool; the drop-down maps to these hardcoded asset
 # fragments (parent-dir/basename), resolved among the installed eyes assets.

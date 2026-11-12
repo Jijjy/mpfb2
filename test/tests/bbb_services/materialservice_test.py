@@ -100,6 +100,32 @@ def test_identify_material():
     ObjectService.delete_object(obj)
 
 
+def test_identify_material_stylized_skin():
+    """STYLIZED_SPEC.md 5.1/8: a STYLIZED skin made by HumanService is identified by its BloodTint input,
+    serializes as STYLIZED and rebuilds with its settings; the other skin types are still made and told apart"""
+    basemesh = HumanService.create_human()
+    assert basemesh
+    HumanService.set_character_skin(None, basemesh, skin_type="STYLIZED")
+    material = MaterialService.get_material(basemesh)
+    assert MaterialService.identify_material(material) == "stylized_skin"
+    assert len(basemesh.material_slots) == 1
+    human_info = HumanService._create_default_human_info_dict()
+    HumanService._populate_human_info_with_skin_info(human_info, basemesh)
+    assert human_info["skin_material_type"] == "STYLIZED"
+    assert "BloodTint" in human_info["skin_material_settings"]["stylized"]
+    human_info["skin_material_settings"]["stylized"]["BloodStrength"] = 0.5
+    HumanService.set_character_skin(None, basemesh, skin_type="STYLIZED", slot_overrides=human_info["skin_material_settings"])
+    group_node = NodeService.find_first_node_by_type_name(MaterialService.get_material(basemesh).node_tree, "ShaderNodeGroup")
+    assert abs(group_node.inputs["BloodStrength"].default_value - 0.5) < 1e-6
+
+    mhmat = os.path.join(LocationService.get_mpfb_test("testdata"), "materials", "almost_all_textures.mhmat")
+    expected = {"MAKESKIN": "makeskin", "GAMEENGINE": "gameengine", "ENHANCED_SSS": "enhanced_skin", "LAYERED": "layered_skin"}
+    for skin_type, material_type in expected.items():
+        HumanService.set_character_skin(mhmat, basemesh, skin_type=skin_type, material_instances=False)
+        assert MaterialService.identify_material(MaterialService.get_material(basemesh)) == material_type, skin_type
+    ObjectService.delete_object(basemesh)
+
+
 def test_add_focus_nodes_makeskin():
     obj = _create_human_with_makeskin_material()
     assert obj

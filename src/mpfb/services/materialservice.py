@@ -13,8 +13,8 @@ from ..entities.nodemodel.v2.composites import NodeWrapperMpfbAlphaMixer
 
 _LOG = LogService.get_logger("services.materialservice")
 
-MaterialType = typing.Literal["empty", "enhanced_skin", "procedural_eyes", "stylized_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]
-"""The eight answers ``identify_material()`` can give.
+MaterialType = typing.Literal["empty", "stylized_skin", "enhanced_skin", "procedural_eyes", "stylized_eyes", "layered_skin", "makeskin", "gameengine", "unknown"]
+"""The nine answers ``identify_material()`` can give.
 
 A literal rather than a bare ``str``, so that the type tests the rest of the module performs against
 the result are checked against the same set of values the identifier can actually return."""
@@ -120,6 +120,9 @@ class MaterialService():
             if node_info and node_info["type"] == "ShaderNodeGroup" and node_info["values"]:
                 # Material is potentially a procedural type material
                 _LOG.debug("node_info", node_info)
+                if "BloodTint" in node_info["values"]:
+                    # STYLIZED skin (NodeWrapperStylizedSkin), STYLIZED_SPEC.md 5.1
+                    return "stylized_skin"
                 if "Pore detail" in node_info["values"]:
                     return "enhanced_skin"
                 if "IrisSection4Color" in node_info["values"]:
