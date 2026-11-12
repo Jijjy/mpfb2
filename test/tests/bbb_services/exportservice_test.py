@@ -210,3 +210,69 @@ def test_no_superfluous_objects_after_bake_with_shape_keys():
         f"Expected {armature_count_before} armature(s) after baking but found {armature_count_after}"
 
     remove_character_copy(character_copy)
+
+def test_bake_stylized_skin_exports_plain_pbr(tmp_path):
+    """ExportService.bake_stylized_skin(): a stylized character exports to glTF with one albedo for the body and no custom nodes"""
+    import numpy as np
+    from .. import MaterialService
+
+    human_info = HUMAN_PRESET_DICT.copy()
+    human_info["name"] = ObjectService.random_name()
+    human_info["clothes"] = []
+    human_info["hair"] = ""
+    human_info["skin_material_type"] = "STYLIZED"
+    basemesh = HumanService.deserialize_from_dict(human_info, HumanService.get_default_deserialization_settings())
+    source_material = MaterialService.get_material(basemesh)
+    assert MaterialService.identify_material(source_material) == "stylized_skin"
+
+    character_copy = None
+    try:
+        character_copy = ExportService.create_character_copy(basemesh)
+        new_basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(character_copy)
+        albedos = ExportService.bake_stylized_skin(new_basemesh, destination=str(tmp_path))
+
+        assert list(albedos.keys()) == [new_basemesh.name]
+        albedo = albedos[new_basemesh.name]
+        assert tuple(albedo.size) == (2048, 2048)
+        assert os.path.dirname(bpy.path.abspath(albedo.filepath)) == str(tmp_path)
+
+        # The baked albedo is the warm skin tone, not black
+        pixels = np.empty(2048 * 2048 * 4, dtype=np.float32)
+        albedo.pixels.foreach_get(pixels)
+        rgb = pixels.reshape(-1, 4)[:, :3]
+        covered = rgb[rgb.max(axis=1) > 0.05]
+        assert len(covered) > 0.2 * 2048 * 2048
+        assert covered[:, 0].mean() > covered[:, 2].mean() + 0.1
+
+        material = MaterialService.get_material(new_basemesh)
+        assert material is not source_material
+        node_types = {node.type for node in material.node_tree.nodes}
+        assert node_types == {"OUTPUT_MATERIAL", "BSDF_PRINCIPLED", "TEX_IMAGE"}
+        principled = material.node_tree.nodes["Principled BSDF"]
+        assert principled.inputs["Base Color"].links[0].from_node.image == albedo
+        assert principled.inputs["Specular IOR Level"].default_value == approx(0.35)
+
+        # The source character keeps its stylized skin
+        assert MaterialService.identify_material(MaterialService.get_material(basemesh)) == "stylized_skin"
+
+        ExportService.bake_modifiers_remove_helpers(new_basemesh, remove_helpers=True)
+        ObjectService.deselect_and_deactivate_all()
+        ObjectService.activate_blender_object(new_basemesh)
+        gltf_path = str(tmp_path / "stylized.gltf")
+        bpy.ops.export_scene.gltf(filepath=gltf_path, export_format='GLTF_SEPARATE', use_selection=True,
+                                  export_animations=False, export_morph=False, export_skins=False)
+        with open(gltf_path, "r", encoding="utf-8") as gltf_file:
+            gltf = json.load(gltf_file)
+
+        assert len(gltf["materials"]) == 1
+        gltf_material = gltf["materials"][0]
+        base_color_texture = gltf_material["pbrMetallicRoughness"]["baseColorTexture"]["index"]
+        base_color_image = gltf["images"][gltf["textures"][base_color_texture]["source"]]
+        assert "albedo" in base_color_image["uri"]
+        assert len([image for image in gltf["images"] if "albedo" in image["uri"]]) == 1
+        assert "metallicRoughnessTexture" in gltf_material["pbrMetallicRoughness"]
+        for path in os.listdir(tmp_path):
+            assert os.path.isfile(os.path.join(tmp_path, path))
+    finally:
+        remove_character_copy(character_copy)
+        remove_character_copy(basemesh)

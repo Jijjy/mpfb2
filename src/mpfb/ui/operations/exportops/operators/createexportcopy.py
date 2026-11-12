@@ -46,7 +46,8 @@ class MPFB_OT_Create_Export_Copy_Operator(MpfbOperator):
             "faceunits_arkit": ctx.faceunits_arkit,
             "interpolate": ctx.interpolate,
             "mask_modifiers": ctx.mask_modifiers,
-            "subdiv_modifiers": ctx.subdiv_modifiers})
+            "subdiv_modifiers": ctx.subdiv_modifiers,
+            "bake_stylized_skin": ctx.bake_stylized_skin})
 
         bake_masks = ctx.mask_modifiers == "BAKE"
         bake_subdiv = ctx.subdiv_modifiers == "BAKE"
@@ -64,6 +65,10 @@ class MPFB_OT_Create_Export_Copy_Operator(MpfbOperator):
 
         export_copy = ExportService.create_character_copy(ctx.basemesh, name_suffix=ctx.suffix, place_in_collection=collection)
         new_basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(export_copy)
+
+        if ctx.bake_stylized_skin:
+            # Before any shape key or modifier is baked, so the bake sees the character as it is shown.
+            ExportService.bake_stylized_skin(new_basemesh)
 
         if ctx.bake_shapekeys:
             TargetService.bake_targets(new_basemesh)

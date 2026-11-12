@@ -10,6 +10,7 @@ The typical workflow is:
 - Load facial animation targets (visemes, ARKit face units) onto the copy with `FaceService.load_targets`.
 - Propagate those shape keys from the basemesh to child clothes and body proxy meshes with `FaceService.interpolate_targets`.
 - Bake mask and subdivision modifiers—and optionally remove helper geometry—with `bake_modifiers_remove_helpers`.
+- Bake a STYLIZED skin into plain albedo and roughness maps with `bake_stylized_skin`, so glTF/FBX exporters see a plain Principled BSDF.
 
 All methods are static.
 
@@ -92,6 +93,21 @@ and leave the character's root object active and solely selected, which is the s
 normally, so neither is observable to a caller.
 
 ---
+
+### Stylized Skin Baking
+
+#### bake_stylized_skin(character, destination="", resolution=STYLIZED_BAKE_RESOLUTION)
+
+For every mesh of the character (basemesh, proxy) whose material is STYLIZED skin, bakes with Cycles what the
+`MpfbStylizedSkin` group feeds into Base Color (SkinTone, BloodMap toward BloodTint, CavityMap, the head-to-feet
+Gradient and the Makeup decal) into one sRGB albedo, and the remapped roughness mask into a Non-Color roughness
+image, both `resolution`² (2048 by default) in the mesh's own UVs. The PNGs go to `destination`, or the user's
+`baked_stylized_skin` folder. The slot then gets a new material: a Principled BSDF fed by the two images, with
+Specular IOR Level and the subsurface values copied over as plain inputs. The material shared with the source
+character is left alone. Scene render and bake settings and the selection are restored afterwards.
+
+Call it on an export copy, before shape keys and modifiers are baked. The "Create export copy" operator does so
+when "Bake stylized skin" is on (the default). Returns a dict of object name to albedo image.
 
 ## Examples
 

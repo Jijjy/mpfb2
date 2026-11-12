@@ -32,7 +32,8 @@ class MPFB_PT_ExportOpsPanel(Abstract_Panel):
             "subdiv_modifiers",
             "bake_shapekeys",
             "delete_helpers",
-            "remove_basemesh"
+            "remove_basemesh",
+            "bake_stylized_skin"
             ])
 
     def _visemes(self, scene, layout):

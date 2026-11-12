@@ -13,9 +13,13 @@ from collections.abc import Sequence
 from .logservice import LogService
 from .targetservice import TargetService
 from .objectservice import ObjectService
+from .locationservice import LocationService
 from .faceservice import FaceService, MICROSOFT_VISEMES, META_VISEMES, ARKIT_FACEUNITS, SIGNIFICANT_SHIFT_MINIMUM
 
 _LOG = LogService.get_logger("services.exportservice")
+
+STYLIZED_BAKE_RESOLUTION = 2048
+"""Side of the albedo a STYLIZED skin is baked to on export (STYLIZED_SPEC.md 5.1)."""
 
 VertexDelta = tuple[int, float, float, float]
 """One significant vertex shift inside a shape key: ``(vertex index, dx, dy, dz)``."""
@@ -437,3 +441,180 @@ class ExportService:
         if group_to_remove:
             _LOG.debug("Deleting vertex group", group_to_remove)
             blender_object.vertex_groups.remove(group_to_remove)
+
+    @staticmethod
+    def bake_stylized_skin(character: bpy.types.Object, destination: str = "",
+                           resolution: int = STYLIZED_BAKE_RESOLUTION) -> dict[str, bpy.types.Image]:
+        """Replace the STYLIZED skin on an export copy with plain PBR maps (STYLIZED_SPEC.md 5.1, Export).
+
+        The stylized skin computes its albedo in a node group: SkinTone, the BloodMap mixed in toward
+        BloodTint, the CavityMap and the head-to-feet Gradient, plus the Makeup decal. A game engine
+        reads none of that. For every mesh of the character whose material is stylized skin, this bakes
+        what the group feeds into Base Color into one albedo image (sRGB) and the remapped roughness mask
+        into a roughness image (Non-Color), in the mesh's own UVs, with Cycles. The mesh then gets a new
+        material made of a Principled BSDF fed by those two images, with Specular IOR Level and the
+        subsurface values copied over as plain inputs, so the glTF/FBX exporters see no node group.
+
+        The material shared with the source character is not touched: the copy gets its own.
+
+        Args:
+        - character (bpy.types.Object): the basemesh, proxy or rig of the export copy.
+        - destination (str): directory the PNG files go to; the user's "baked_stylized_skin" folder if empty.
+        - resolution (int): side of the square images.
+
+        Returns:
+        - dict: object name to the albedo image baked for it.
+        """
+        from .materialservice import MaterialService  # pylint: disable=C0415
+        from .hairbakeservice import HairBakeService  # pylint: disable=C0415
+
+        _LOG.enter()
+
+        basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(character)
+        if not basemesh:
+            raise ValueError("No basemesh related to the given object")
+        root_object = basemesh.parent if basemesh.parent else basemesh
+        candidates = [root_object] + list(ObjectService.get_list_of_children(root_object))
+
+        if not destination:
+            destination = LocationService.get_user_home("baked_stylized_skin")
+
+        targets: list[tuple[bpy.types.Object, int, bpy.types.Material]] = []
+        for obj in candidates:
+            if obj.type != 'MESH':
+                continue
+            for slot_index, slot in enumerate(obj.material_slots):
+                if MaterialService.identify_material(slot.material) == "stylized_skin":
+                    targets.append((obj, slot_index, typing.cast(bpy.types.Material, slot.material)))
+
+        if not targets:
+            _LOG.debug("No stylized skin to bake on", character)
+            return {}
+
+        scene = bpy.context.scene
+        saved = {
+            "engine": scene.render.engine,
+            "samples": scene.cycles.samples,
+            "use_denoising": scene.cycles.use_denoising,
+            "bake": {key: getattr(scene.render.bake, key) for key in ("margin", "use_clear", "target", "use_selected_to_active")},
+            "active": bpy.context.view_layer.objects.active,
+            "selected": [obj for obj in bpy.context.view_layer.objects if obj.select_get()],
+            }
+
+        albedos: dict[str, bpy.types.Image] = {}
+        try:
+            scene.render.engine = 'CYCLES'
+            # An emission bake reads the shader once per texel: there is no noise to sample away.
+            scene.cycles.samples = 1
+            scene.cycles.use_denoising = False
+            scene.render.bake.margin = 16
+            scene.render.bake.use_clear = True
+            scene.render.bake.target = 'IMAGE_TEXTURES'
+            scene.render.bake.use_selected_to_active = False
+
+            for obj, slot_index, material in targets:
+                albedo, roughness = ExportService._bake_stylized_skin_slot(obj, slot_index, material, destination, resolution, HairBakeService)
+                albedos[obj.name] = albedo
+                _LOG.debug("Baked stylized skin", (obj.name, albedo.filepath, roughness.filepath))
+        finally:
+            scene.render.engine = saved["engine"]
+            scene.cycles.samples = saved["samples"]
+            scene.cycles.use_denoising = saved["use_denoising"]
+            for key, value in saved["bake"].items():
+                setattr(scene.render.bake, key, value)
+            for obj in bpy.context.view_layer.objects:
+                obj.select_set(obj in saved["selected"])
+            bpy.context.view_layer.objects.active = saved["active"]
+
+        return albedos
+
+    @staticmethod
+    def _socket(sockets: typing.Any, identifier: str) -> bpy.types.NodeSocket:
+        for socket in sockets:
+            if socket.identifier == identifier:
+                return socket
+        raise KeyError(identifier)
+
+    @staticmethod
+    def _bake_stylized_skin_slot(obj: bpy.types.Object, slot_index: int, material: bpy.types.Material, destination: str,
+                                 resolution: int, bake_service: typing.Any) -> tuple[bpy.types.Image, bpy.types.Image]:
+        """Bake one stylized skin slot to albedo and roughness images and put a plain material in its place."""
+        group_node = next(node for node in typing.cast(bpy.types.NodeTree, material.node_tree).nodes
+                          if node.type == 'GROUP' and node.inputs.get("BloodTint") is not None)
+        group_node = typing.cast(bpy.types.ShaderNodeGroup, group_node)
+
+        # A throwaway copy of the material and of its group, where the group's output is rewired to
+        # emit what would have gone into the Principled BSDF.
+        bake_material = material.copy()
+        bake_tree = typing.cast(bpy.types.NodeTree, bake_material.node_tree)
+        bake_group_node = typing.cast(bpy.types.ShaderNodeGroup, bake_tree.nodes[group_node.name])
+        bake_group = typing.cast(bpy.types.ShaderNodeTree, group_node.node_tree).copy()
+        bake_group_node.node_tree = bake_group
+        group_nodes = bake_group.nodes
+        emission = group_nodes.new("ShaderNodeEmission")
+        emission.inputs["Strength"].default_value = 1.0
+        bake_group.links.new(emission.outputs["Emission"], group_nodes["Group Output"].inputs["BSDF"])
+        albedo_socket = ExportService._socket(group_nodes["Makeup"].outputs, "Result_Color")
+        roughness_socket = group_nodes["Roughness"].outputs["Result"]
+
+        image_node = typing.cast(bpy.types.ShaderNodeTexImage, bake_tree.nodes.new("ShaderNodeTexImage"))
+        bake_tree.nodes.active = image_node
+
+        saved_material = obj.material_slots[slot_index].material
+        images: list[bpy.types.Image] = []
+        try:
+            obj.material_slots[slot_index].material = bake_material
+            ObjectService.deselect_and_deactivate_all()
+            ObjectService.activate_blender_object(obj)
+
+            for suffix, socket, colorspace in (("_albedo", albedo_socket, "sRGB"), ("_roughness", roughness_socket, "Non-Color")):
+                bake_group.links.new(socket, emission.inputs["Color"])
+                image = bake_service.bake_image(obj.name + "_stylized" + suffix, resolution, alpha=False, colorspace=colorspace)
+                image_node.image = image
+                bpy.ops.object.bake(type='EMIT')
+                path = bake_service.resolve_bake_path(obj.name + "_stylized", destination, suffix=suffix)
+                image.filepath_raw = path
+                image.file_format = 'PNG'
+                image.save()
+                image.filepath = path
+                image.source = 'FILE'
+                image.reload()
+                images.append(image)
+        finally:
+            obj.material_slots[slot_index].material = saved_material
+            bpy.data.materials.remove(bake_material, do_unlink=True)
+            bpy.data.node_groups.remove(bake_group, do_unlink=True)
+
+        albedo, roughness = images
+        obj.material_slots[slot_index].material = ExportService._plain_stylized_material(material, group_node, albedo, roughness)
+        return albedo, roughness
+
+    @staticmethod
+    def _plain_stylized_material(material: bpy.types.Material, group_node: bpy.types.ShaderNodeGroup,
+                                 albedo: bpy.types.Image, roughness: bpy.types.Image) -> bpy.types.Material:
+        """A Principled BSDF material fed by the baked images, carrying the group's scalar settings."""
+        plain = bpy.data.materials.new(material.name + "_baked")
+        plain.use_nodes = True
+        tree = typing.cast(bpy.types.NodeTree, plain.node_tree)
+        tree.nodes.clear()
+        output = tree.nodes.new("ShaderNodeOutputMaterial")
+        output.location = (400.0, 0.0)
+        principled = tree.nodes.new("ShaderNodeBsdfPrincipled")
+        principled.location = (100.0, 0.0)
+        tree.links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+
+        for name, image, location, socket_name in (("Albedo", albedo, (-300.0, 200.0), "Base Color"),
+                                                   ("Roughness", roughness, (-300.0, -100.0), "Roughness")):
+            image_node = typing.cast(bpy.types.ShaderNodeTexImage, tree.nodes.new("ShaderNodeTexImage"))
+            image_node.name = image_node.label = name
+            image_node.image = image
+            image_node.location = location
+            tree.links.new(image_node.outputs["Color"], principled.inputs[socket_name])
+
+        for group_input, principled_input in (("SpecularIORLevel", "Specular IOR Level"),
+                                              ("SubsurfaceWeight", "Subsurface Weight"),
+                                              ("SubsurfaceRadius", "Subsurface Radius"),
+                                              ("SubsurfaceScale", "Subsurface Scale")):
+            value = group_node.inputs[group_input].default_value
+            principled.inputs[principled_input].default_value = value if isinstance(value, float) else tuple(value)
+        return plain
