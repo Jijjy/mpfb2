@@ -6,7 +6,9 @@
 For gender 0/1 x age young/old x weight min/max and stylization 0, 0.5, 1: a full human through
 HumanService (default rig, clothes, shoes, hair, high-poly eyes, eyebrows, eyelashes, teeth), posed
 (arms raised, elbows, hip and knee bent, head nodded and turned), rendered in Workbench front and face, and
-measured. Clipping metric per asset: share of its posed vertices more than 2 mm inside the posed
+measured. Eyes_out: eyeball vertices outside the skin that still have skin in front of them (pushed
+through a lid); the plain Eyes share rises with lid coverage of a bigger eyeball and is not clipping
+by itself. Clipping metric per asset: share of its posed vertices more than 2 mm inside the posed
 body (signed against the nearest body face); for teeth, vertices more than 1 mm outside it. "No new
 clipping" means the share at stylization 0.5 and 1 is no higher than at 0. Writes
 <corner>_s<s>_{body,face}.png, fit.tsv, and prints the table.
@@ -95,6 +97,18 @@ def body_tree(body):
     return BVHTree.FromPolygons(verts, polys)
 
 
+def poke_out(tree, obj):
+    """Share of the asset's posed vertices more than 1 mm outside the body that also have body surface
+    in front of them along -y: geometry pushed through the lids rather than seen through the opening."""
+    verts, _ = posed_world(obj)
+    bad = 0
+    for v in verts:
+        hit = tree.find_nearest(v)
+        if hit[0] is not None and (v - hit[0]).dot(hit[1]) > 0.001:
+            bad += tree.ray_cast(v + hit[1] * 0.0005, (0.0, -1.0, 0.0), 0.2)[0] is not None
+    return bad / max(1, len(verts))
+
+
 def clipping(tree, obj, exposed):
     """Share of the asset's posed vertices more than 2 mm inside the body, or for teeth (exposed) the
     share with no body surface in front of them along -y (poking through the closed lips)."""
@@ -129,6 +143,7 @@ for name, g, age, w in corners():
         body, rig, parts = build(g, age, w, s)
         tree = body_tree(body)
         fit = {k: clipping(tree, o, k == "Teeth") for k, o in parts.items()}
+        fit["Eyes_out"] = poke_out(tree, parts["Eyes"])
         verts, _ = posed_world(body)
         zmax = max(v.z for v in verts)
         body.color = (0.85, 0.62, 0.48, 1)
@@ -154,7 +169,7 @@ for name, g, age, w in corners():
             scene.render.filepath = os.path.join(out_dir, f"{name}_s{s:g}_{shot}.png")
             bpy.ops.render.render(write_still=True)
 
-keys = ["Clothes", "Shoes", "Hair", "Eyes", "Eyebrows", "Eyelashes", "Teeth"]
+keys = ["Clothes", "Shoes", "Hair", "Eyes", "Eyes_out", "Eyebrows", "Eyelashes", "Teeth"]
 with open(os.path.join(out_dir, "fit.tsv"), "w") as f:
     f.write("\t".join(["corner", "s", "height"] + keys) + "\n")
     for r in rows:
