@@ -7,8 +7,8 @@ Writes sty_lash.png and sty_brow.png (1024², RGBA, near-black RGB, the shape in
 - lashes: each lash card is a quad-grid strip; the painter finds every UV island, its four corners
   and its root/tip and inner/outer sides from the card's own obj, gives each face corner a strip
   coordinate (s along the strip, 0 at the inner corner; t across it, 0 at the lid root) and
-  rasterises the wing in those coordinates. Upper cards hold one solid tapered wing from the root, half the card at the inner corner, widening
-  outwards and ending in a pointed flick at the outer corner; lower cards stay empty.
+  rasterises the wing in those coordinates. Upper cards hold a thin solid band along the root with pointed prongs rising from it, leaning
+  outwards and longer towards the outer corner, the last one the flick; lower cards stay empty.
 - brows: the brow card is not a clean grid (its tail ends in a point), and its outline is already a
   brow: a blunt head at the inner end tapering to a pointed tail. The card is filled solid, inset by
   BROW_INSET of the texture and its faceted outline rounded (blur, then a sharp ramp).
@@ -158,12 +158,27 @@ def smoothstep(x):
     return x * x * (3.0 - 2.0 * x)
 
 
+LASH_PRONGS = 9
+
+
 def lash_wing(s, t):
-    """Solid wing from the lid root: 55% of the card at the inner corner, the full card from 60% along,
-    then a pointed flick: the lower edge rises to meet the upper one at the outer end."""
-    top = 0.55 + 0.45 * smoothstep(s / 0.6)
-    bottom = 0.85 * smoothstep((s - 0.80) / 0.20) ** 1.3
-    return (t >= bottom - 0.02) & (t <= top) & (s >= 0.015) & (s <= 0.985)
+    """A thin solid band along the lid root with LASH_PRONGS pointed prongs rising from it. The band is
+    a quarter of the card at the inner corner and two fifths from 60% along; the prongs are triangles that
+    lean towards the outer corner and grow from 55% of the card at the inner end to the full card at
+    the outer end, so the last one is the flick."""
+    band = 0.26 + 0.14 * smoothstep(s / 0.6)
+    shape = t <= band
+    for i in range(LASH_PRONGS):
+        k = i / (LASH_PRONGS - 1)
+        centre = 0.14 + 0.80 * k
+        height = 0.55 + 0.45 * k
+        half = 0.038 + 0.012 * k
+        lean = 0.03 + 0.03 * k
+        u = np.clip((t - 0.12) / (height - 0.12), 0.0, 1.0)
+        mid = centre + lean * u ** 1.5
+        width = half * (1.0 - u)
+        shape = shape | ((t <= height) & (np.abs(s - mid) <= width))
+    return shape & (s >= 0.015) & (s <= 0.985)
 
 
 def paint(obj_path, kind):

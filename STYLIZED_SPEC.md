@@ -191,7 +191,7 @@ fits to them). Nothing in the eye asset changes. Presets follow the existing
 - A one-click "Make stylized" operator on an existing character sets stylization 1.0, the
   stylized skin and the stylized eyes together, so R2 holds by construction.
 - Teeth, tongue and the stock eyebrows/eyelashes: recoloured by presets (flat white teeth,
-  tongue tinted to `BloodTint`, solid-colour brows). **No new meshes.** Make stylized recolours them, and so
+  tongue tinted to `BloodTint`, solid-colour brows, upper lashes a thin band with pointed prongs). **No new meshes.** Make stylized recolours them, and so
   does adding one (MAKESKIN material) to a human whose skin is already STYLIZED.
 
 ### 5.4 Studio lighting (optional)
