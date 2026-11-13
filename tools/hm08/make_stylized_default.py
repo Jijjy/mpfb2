@@ -9,7 +9,7 @@ joint cubes included, so fitting and rigging follow). Regions come from the defa
 weights, which give soft, symmetric masks for free. Coordinates are base.obj space: Y up,
 +Z forward, decimetres.
 
-    python3 tools/hm08/make_stylized_default.py            # writes stylized-default.target.gz
+    python3 tools/hm08/make_stylized_default.py            # writes stylized-default and stylized-chunky
     python3 tools/hm08/make_stylized_default.py --measure  # prints the head/height check only
 """
 import argparse
@@ -24,6 +24,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "..", "..", "src", "mpfb", "data")
 OUT = os.path.join(HERE, "stylized-default.target.gz")
+OUT_CHUNKY = os.path.join(HERE, "stylized-chunky.target.gz")
 
 # §6.1 scales, relative to the HM08 default. "default" is the anime-leaning look the user chose on
 # PRXJX2 (much more stylized, facial detail left to textures). "subtle" is the first §6.1 table,
@@ -40,6 +41,14 @@ PRESETS = {
                    EYE_FORWARD=0.0, EAR_FILL=0.0, NOSE_OUT=0.0, MOUTH_OUT=0.0,
                    FACE_DETAIL=0.0, MOUTH_UP=0.0, EYE_ROUND=(1.0, 1.0, 1.0, 1.0)),
 }
+# "chunky" is the second endpoint (STYLIZED_SPEC.md 4.3, PC6WRX): about 6 heads, head +20%, hands and
+# feet +25%, and the lower leg 15% shorter: head +20% alone gives 6.4 heads. The eyes and the face's forward/up offsets (dm) grow with the head, so the face keeps
+# the default's look at the bigger size; everything else is the default's.
+_GROW = 1.20 / PRESETS["default"]["HEAD"]
+PRESETS["chunky"] = dict(PRESETS["default"], HEAD=1.20, HANDS=1.25, FEET=1.25, LOWER_LEG=0.85,
+                         EYES=PRESETS["default"]["EYES"] * _GROW,
+                         **{k: PRESETS["default"][k] * _GROW
+                            for k in ("EYE_FORWARD", "NOSE_OUT", "MOUTH_OUT", "MOUTH_UP")})
 # HEAD: uniform; CRANIUM: on top of HEAD, above the brow; FLATTEN: share of nostril flare
 # relief removed; NECK: thickness, X and Z; SHOULDERS: width at the shoulder joints;
 # SIMPLIFY: share of the body's fine relief (muscle, folds, creases) removed. Face: NOSE scales
@@ -533,20 +542,29 @@ def main():
     groups, weights = load_groups(), load_weights(len(p0))
     p = build(p0, faces, groups, weights)
     subtle = build(p0, faces, groups, weights, "subtle")
+    chunky = build(p0, faces, groups, weights, "chunky")
     for label, q in (("hm08 raw", raw), ("hm08 default adult", p0), ("stylized-default", p),
-                     ("subtle (first 6.1)", subtle)):
+                     ("subtle (first 6.1)", subtle), ("stylized-chunky", chunky)):
         r, h, t = measure(q, groups, weights)
         print(f"{label}: head {h:.3f} dm, height {t:.3f} dm, head/height {r:.4f} "
               f"({1 / r:.2f} heads)")
     if args.measure:
         return
-    d = p - p0
+    write_target(OUT, p - p0, "# stylized-default: STYLIZED_SPEC.md 6.1, built by make_stylized_default.py\n")
+    # stylized-chunky is the step from the default endpoint to the chunky one: the Stylization slider
+    # runs stylized-default from 0 to 1, then this one from 1 to 2 on top of it (HumanService).
+    write_target(OUT_CHUNKY, chunky - p,
+                 "# stylized-chunky: STYLIZED_SPEC.md 4.3, on top of stylized-default at 1.0, built by "
+                 "make_stylized_default.py\n")
+
+
+def write_target(path, d, header):
     keep = np.abs(d).max(1) >= 1e-5
-    with io.TextIOWrapper(gzip.GzipFile(OUT, "wb", mtime=0)) as f:  # mtime=0: reproducible bytes
-        f.write("# stylized-default: STYLIZED_SPEC.md 6.1, built by make_stylized_default.py\n")
+    with io.TextIOWrapper(gzip.GzipFile(path, "wb", mtime=0)) as f:  # mtime=0: reproducible bytes
+        f.write(header)
         for i in np.nonzero(keep)[0]:
             f.write(f"{i} {d[i, 0]:.5f} {d[i, 1]:.5f} {d[i, 2]:.5f}\n")
-    print(f"wrote {OUT}: {keep.sum()} vertices")
+    print(f"wrote {path}: {keep.sum()} vertices")
 
 
 if __name__ == "__main__":

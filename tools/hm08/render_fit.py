@@ -3,7 +3,7 @@
     BLENDER_USER_RESOURCES=<dir with the mpfb extension and its asset packs> \
         blender -b -P tools/hm08/render_fit.py -- <out_dir>
 
-For gender 0/1 x age young/old x weight min/max and stylization 0, 0.5, 1: a full human through
+For gender 0/1 x age young/old x weight min/max and stylization 0, 0.5, 1 (FIT_STYLE): a full human through
 HumanService (default rig, clothes, shoes, hair, high-poly eyes, eyebrows, eyelashes, teeth), posed
 (arms raised, elbows, hip and knee bent, head nodded and turned), rendered in Workbench (lashes and brows through the stylized alpha textures) front, face and eye, and
 measured. Eyes_out: eyeball vertices outside the skin that still have skin in front of them (pushed
@@ -39,7 +39,8 @@ def asset(sub):
 POSE = {"upperarm01.L": (0, 0, 55), "upperarm01.R": (0, 0, -55), "lowerarm01.L": (0, 0, 35),
         "lowerarm01.R": (0, 0, -35), "upperleg01.L": (-35, 0, 0), "lowerleg01.L": (60, 0, 0),
         "spine03": (10, 0, 0), "head": (10, 15, 0)}
-STYLE = (0.0, 0.5, 1.0)
+# FIT_STYLE overrides the slider values, e.g. FIT_STYLE=0,1,2 to check the stylized-chunky endpoint (PC6WRX)
+STYLE = tuple(float(v) for v in os.environ.get("FIT_STYLE", "0,0.5,1").split(","))
 
 
 def corners():

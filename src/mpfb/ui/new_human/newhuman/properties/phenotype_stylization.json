@@ -1,9 +1,9 @@
 {
     "type": "float",
     "name": "phenotype_stylization",
-    "description": "Initial strength of the stylized-default target. This can be changed in the modeling panel later (stylization section)",
+    "description": "Initial stylization: 0 plain, 1 stylized-default, 2 the chunky endpoint (about 6 heads). This can be changed in the modeling panel later (stylization section)",
     "label": "Stylization",
     "default": 1.0,
-    "max": 1.0,
+    "max": 2.0,
     "min": 0.0
 }

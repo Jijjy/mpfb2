@@ -65,28 +65,29 @@ def test_every_target_file_has_a_target_json_entry():
 
 
 def test_stylization_section_is_one_sided():
-    """The stylization section has one category, stylized-default, with no opposites (slider range 0 to 1)"""
+    """The stylization section has one category, stylized-default, with no opposites (slider range 0 to 2: stylized-default, then stylized-chunky)"""
     categories = _sections()["stylization"]["categories"]
     assert len(categories) == 1
     category = categories[0]
     assert category["name"] == "stylized-default"
-    assert category["targets"] == ["stylized-default"]
+    assert category["targets"] == ["stylized-default", "stylized-chunky"]
     assert not category["has_left_and_right"]
     assert "opposites" not in category
 
 
 def test_stylized_default_indices_fit_hm08():
-    """Every vertex index in stylized-default is below HM08's vertex count (19,158: helpers included)"""
+    """Every vertex index in stylized-default and stylized-chunky is below HM08's vertex count (19,158: helpers included)"""
     with open(os.path.join(LocationService.get_mpfb_data("3dobjs"), "base.obj"), "r") as obj_file:
         vertex_count = sum(1 for line in obj_file if line.startswith("v "))
     assert vertex_count == 19158
-    path = os.path.join(_targets_dir(), "stylization", "stylized-default.target.gz")
-    indices = []
-    with gzip.open(path, "rt") as target_file:
-        for line in target_file:
-            if line[:1].isdigit():
-                indices.append(int(line.split()[0]))
-    assert indices, "stylized-default has no vertex lines"
-    assert min(indices) >= 0
-    assert max(indices) < vertex_count
-    assert len(indices) == len(set(indices)), "a vertex is listed twice"
+    for name in ("stylized-default", "stylized-chunky"):
+        path = os.path.join(_targets_dir(), "stylization", name + ".target.gz")
+        indices = []
+        with gzip.open(path, "rt") as target_file:
+            for line in target_file:
+                if line[:1].isdigit():
+                    indices.append(int(line.split()[0]))
+        assert indices, name + " has no vertex lines"
+        assert min(indices) >= 0, name
+        assert max(indices) < vertex_count, name
+        assert len(indices) == len(set(indices)), name + ": a vertex is listed twice"

@@ -1,7 +1,7 @@
 {
     "type": "float",
     "name": "stylization",
-    "description": "The Stylization slider value, 0 to 1. The stylized-default shape key carries this times the age factor (STYLIZED_SPEC.md 4.3). -1 means not set: a human made before the age fade, whose shape key value is the slider",
+    "description": "The Stylization slider value, 0 to 2. The stylized-default shape key carries min(value, 1) and stylized-chunky max(value - 1, 0), each times the age factor (STYLIZED_SPEC.md 4.3). -1 means not set: a human made before the age fade, whose shape key value is the slider",
     "label": "Stylization",
     "default": -1.0
 }

@@ -9,7 +9,7 @@ from ...services import ObjectService
 from ...services import TargetService
 from ...services import AssetService
 from ...services import HumanService
-from ...services.humanservice import STYLIZATION_TARGET
+from ...services.humanservice import STYLIZATION_TARGET, STYLIZATION_MAX
 from ...services import UiService
 from ..abstractpanel import Abstract_Panel
 
@@ -404,22 +404,24 @@ for name in _section_names:
         _min_val = 0.0
         if "opposites" in _category:
             _min_val = -1.0
+        # The Stylization slider runs on from stylized-default (1.0) to stylized-chunky (2.0)
+        _max_val = STYLIZATION_MAX if _category["name"] == STYLIZATION_TARGET else 1.0
 
         if _category["has_left_and_right"]:
             _get_wrapper_left = _sided_getter_factory(name, _left_name, _i, "left")
             _get_wrapper_right = _sided_getter_factory(name, _right_name, _i, "right")
             _set_wrapper_left = _sided_setter_factory(name, _left_name, _i, "left")
             _set_wrapper_right = _sided_setter_factory(name, _right_name, _i, "right")
-            prop = FloatProperty(name=_left_name, get=_get_wrapper_left, set=_set_wrapper_left, description="Set target value", max=1.0, min=_min_val)
+            prop = FloatProperty(name=_left_name, get=_get_wrapper_left, set=_set_wrapper_left, description="Set target value", max=_max_val, min=_min_val)
             setattr(bpy.types.Scene, _left_name, prop)
             _LOG.debug("property left", prop)
-            prop = FloatProperty(name=_right_name, get=_get_wrapper_right, set=_set_wrapper_right, description="Set target value", max=1.0, min=_min_val)
+            prop = FloatProperty(name=_right_name, get=_get_wrapper_right, set=_set_wrapper_right, description="Set target value", max=_max_val, min=_min_val)
             setattr(bpy.types.Scene, _right_name, prop)
             _LOG.debug("property right", prop)
         else:
             _get_wrapper_unsided = _unsided_getter_factory(name, _unsided_name, _i)
             _set_wrapper_unsided = _unsided_setter_factory(name, _unsided_name, _i)
-            prop = FloatProperty(name=_unsided_name, get=_get_wrapper_unsided, set=_set_wrapper_unsided, description="Set target value", max=1.0, min=_min_val)
+            prop = FloatProperty(name=_unsided_name, get=_get_wrapper_unsided, set=_set_wrapper_unsided, description="Set target value", max=_max_val, min=_min_val)
             setattr(bpy.types.Scene, _unsided_name, prop)
             _LOG.debug("property unsided", prop)
 

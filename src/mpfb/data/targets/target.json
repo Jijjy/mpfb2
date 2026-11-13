@@ -3908,7 +3908,8 @@
                 "label": "stylized-default",
                 "name": "stylized-default",
                 "targets": [
-                    "stylized-default"
+                    "stylized-default",
+                    "stylized-chunky"
                 ]
             }
         ],

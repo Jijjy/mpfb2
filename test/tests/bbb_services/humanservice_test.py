@@ -368,6 +368,33 @@ def test_stylization_fades_with_age():
     ObjectService.delete_object(loaded)
 
 
+def test_stylization_chunky_endpoint():
+    """HumanService -- slider 2.0 is stylized-default 1 plus stylized-chunky 1, about 6 heads; saved and loaded as the slider"""
+    basemesh = HumanService.create_human(stylization=2.0)
+    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
+    assert TargetService.get_target_value(basemesh, "stylized-chunky") == approx(1.0)
+    ratio = _head_to_height(basemesh)
+    assert 0.155 <= ratio <= 0.175, "head/height " + str(ratio)
+    HumanService.set_stylization(basemesh, 1.5)
+    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
+    assert TargetService.get_target_value(basemesh, "stylized-chunky") == approx(0.5)
+    human_info = json.loads(HumanService.serialize_to_json_string(basemesh))
+    assert {"target": "stylized-default", "value": approx(1.5)} in human_info["targets"]
+    assert not [entry for entry in human_info["targets"] if entry["target"] == "stylized-chunky"]
+    HumanService.set_stylization(basemesh, 0.5)
+    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(0.5)
+    assert not TargetService.has_target(basemesh, "stylized-chunky")
+    ObjectService.delete_object(basemesh)
+    human_info["phenotype"]["age"] = 0.1875
+    deser = HumanService.get_default_deserialization_settings()
+    deser["load_clothes"] = False
+    loaded = HumanService.deserialize_from_dict(human_info, deser)
+    assert HumanService.get_stylization(loaded) == approx(1.5)
+    assert TargetService.get_target_value(loaded, "stylized-default") == approx(0.5)
+    assert TargetService.get_target_value(loaded, "stylized-chunky") == approx(0.25)
+    ObjectService.delete_object(loaded)
+
+
 def test_deserialize_from_mhm_without_stylization_loads_at_zero():
     """HumanService.deserialize_from_mhm() -- an .mhm without the stylization key is not stylized"""
     deser = HumanService.get_default_deserialization_settings()

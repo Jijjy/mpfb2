@@ -28,6 +28,9 @@ _LOG = LogService.get_logger("services.humanservice")
 
 STYLIZATION_TARGET = "stylized-default"
 """The stylization slider's target (data/targets/stylization). A new human gets it at 1.0, see create_human."""
+STYLIZATION_CHUNKY_TARGET = "stylized-chunky"
+"""The second endpoint (STYLIZED_SPEC.md 4.3): stacked on stylized-default at 1.0, it carries the slider from 1 to 2."""
+STYLIZATION_MAX = 2.0
 
 NEW_HUMAN_SKIN_TYPE = "STYLIZED"
 """The skin type a new human gets (STYLIZED_SPEC.md 5.3). Presets and .mhm files that name one keep theirs."""
@@ -271,7 +274,7 @@ class HumanService:
         _LOG.enter()
         human_info["phenotype"] = TargetService.get_macro_info_dict_from_basemesh(basemesh)
         targets = [entry for entry in TargetService.get_target_stack(basemesh, exclude_starts_with=("$md-", "!ex-"))
-                   if entry["target"] != STYLIZATION_TARGET]
+                   if entry["target"] not in (STYLIZATION_TARGET, STYLIZATION_CHUNKY_TARGET)]
         # Save the slider, not the faded shape key value, so a child keeps its setting when aged up.
         stylization = HumanService.get_stylization(basemesh)
         if stylization > 0.0:
@@ -854,7 +857,8 @@ class HumanService:
         Args:
             basemesh (bpy.types.Object): The human's basemesh.
         """
-        if HumanService.get_stylization(basemesh) != 1.0:
+        # A chunky character (slider above 1) is already stylized and keeps its shape
+        if HumanService.get_stylization(basemesh) < 1.0:
             HumanService.set_stylization(basemesh, 1.0)
             # The eyes, brows, clothes and rig were fitted to the old shape
             HumanService.refit(basemesh)
@@ -1234,19 +1238,22 @@ class HumanService:
     @staticmethod
     def get_stylization(basemesh: bpy.types.Object) -> float:
         """
-        The Stylization slider value of the human, before the age fade. A human made before the fade
-        existed has no stored value; its stylized-default shape key value is the slider.
+        The Stylization slider value of the human, 0 to 2, before the age fade. A human made before the
+        fade existed has no stored value; its stylized-default (plus stylized-chunky) shape key value is
+        the slider.
         """
         value = HumanObjectProperties.get_value("stylization", entity_reference=basemesh)
         if value is None or value < 0.0:
-            return TargetService.get_target_value(basemesh, STYLIZATION_TARGET)
+            return TargetService.get_target_value(basemesh, STYLIZATION_TARGET) + \
+                TargetService.get_target_value(basemesh, STYLIZATION_CHUNKY_TARGET)
         return float(value)
 
     @staticmethod
     def set_stylization(basemesh: bpy.types.Object, value: float, delete_target_on_zero: bool = True) -> None:
         """
-        Set the Stylization slider of the human and put slider x age factor on the stylized-default shape
-        key (STYLIZED_SPEC.md 4.3). The target is only loaded once the effective weight is above zero.
+        Set the Stylization slider of the human, 0 to 2 (STYLIZED_SPEC.md 4.3). From 0 to 1 it drives
+        stylized-default, from 1 to 2 stylized-chunky on top of it; each shape key gets its share times the
+        age factor. A target is only loaded once its effective weight is above zero.
         """
         HumanObjectProperties.set_value("stylization", float(value), entity_reference=basemesh)
         HumanService.apply_stylization_age_fade(basemesh, delete_target_on_zero=delete_target_on_zero)
@@ -1254,18 +1261,21 @@ class HumanService:
     @staticmethod
     def apply_stylization_age_fade(basemesh: bpy.types.Object, delete_target_on_zero: bool = True) -> None:
         """
-        Recompute the stylized-default shape key from the stored slider value and the current age.
-        Call after the age macro changes.
+        Recompute the stylized-default and stylized-chunky shape keys from the stored slider value and the
+        current age. Call after the age macro changes.
         """
         slider = HumanService.get_stylization(basemesh)
         # A human from before the fade gets its slider stored now, so the fade does not compound.
         HumanObjectProperties.set_value("stylization", float(slider), entity_reference=basemesh)
         age = HumanObjectProperties.get_value("age", entity_reference=basemesh)
-        weight = slider * HumanService.stylization_age_factor(float(age))
-        if TargetService.has_target(basemesh, STYLIZATION_TARGET):
-            TargetService.set_target_value(basemesh, STYLIZATION_TARGET, weight, delete_target_on_zero=delete_target_on_zero)
-        elif weight > 0.0:
-            TargetService.bulk_load_targets(basemesh, [{"target": STYLIZATION_TARGET, "value": weight}])
+        factor = HumanService.stylization_age_factor(float(age))
+        for target, share in ((STYLIZATION_TARGET, min(slider, 1.0)),
+                              (STYLIZATION_CHUNKY_TARGET, max(slider - 1.0, 0.0))):
+            weight = share * factor
+            if TargetService.has_target(basemesh, target):
+                TargetService.set_target_value(basemesh, target, weight, delete_target_on_zero=delete_target_on_zero)
+            elif weight > 0.0:
+                TargetService.bulk_load_targets(basemesh, [{"target": target, "value": weight}])
 
     @staticmethod
     def _load_targets(human_info: HumanInfo, basemesh: bpy.types.Object) -> None:
@@ -1275,13 +1285,14 @@ class HumanService:
         if not "targets" in human_info:
             profiler.leave("_load_targets")
             return
-        # The stylization entry is the slider value; the shape key gets it times the age factor.
+        # The stylization entry is the slider value (0 to 2); the shape keys get it times the age factor.
+        # A stylized-chunky entry is not written (the slider entry covers it) and is dropped if present.
         stylization = 0.0
         targets = []
         for entry in human_info["targets"]:
             if entry["target"] == STYLIZATION_TARGET:
                 stylization = float(entry["value"])
-            else:
+            elif entry["target"] != STYLIZATION_CHUNKY_TARGET:
                 targets.append(entry)
         TargetService.bulk_load_targets(basemesh, targets)
         HumanService.set_stylization(basemesh, stylization)
@@ -1836,8 +1847,8 @@ class HumanService:
             feet_on_ground (bool): Whether to position the feet on the ground. Default is True.
             scale (float): The scale factor for the basemesh. Default is 0.1.
             macro_detail_dict (MacroInfo | None): A dictionary containing macro detail settings. If None, default settings are used.
-            stylization (float): The Stylization slider, 0 to 1. Default is 1.0. The stylized-default target gets
-                it times the age factor (see set_stylization). At 0 the target is not loaded at all, so the mesh
+            stylization (float): The Stylization slider, 0 to 2. Default is 1.0. Up to 1 the stylized-default
+                target gets it times the age factor, above 1 stylized-chunky adds the rest (see set_stylization). At 0 the target is not loaded at all, so the mesh
                 is the plain one.
 
         Returns:
