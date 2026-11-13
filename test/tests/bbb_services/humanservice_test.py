@@ -679,6 +679,25 @@ def test_serialize_human_with_generated_rigify_human_toes_infers_human_toes():
         _cleanup_named_with_relatives(basemesh_name)
 
 
+def test_add_mhclo_asset_stylizes_lashes_on_stylized_skin():
+    """HumanService.add_mhclo_asset() -- stock lashes added to a human with STYLIZED skin get the flat colour and the solid wing"""
+    path = AssetService.find_asset_absolute_path("eyelashes01/eyelashes01.mhclo", "eyelashes")
+    if path is None:
+        pytest.skip("the stock eyelashes are not installed")
+    basemesh = HumanService.create_human()
+    HumanService.set_character_skin(None, basemesh, skin_type="STYLIZED")
+    assert HumanService.has_stylized_skin(basemesh)
+    lashes = HumanService.add_mhclo_asset(path, basemesh, asset_type="Eyelashes", set_up_rigging=False, interpolate_weights=False,
+                                          import_subrig=False, import_weights=False)
+    try:
+        principled = MaterialService.get_material(lashes).node_tree.nodes["Principled BSDF"]
+        assert not principled.inputs["Base Color"].is_linked
+        assert os.path.basename(principled.inputs["Alpha"].links[0].from_node.image.filepath) == "sty_lash.png"
+    finally:
+        for obj in (lashes, basemesh):
+            ObjectService.delete_object(obj)
+
+
 def test_make_stylized_sets_shape_skin_eyes_and_recolours():
     """HumanService.make_stylized() -- new-human defaults are stylized; the operator sets stylization, skin and eyes together"""
     NEW_HUMAN_SKIN_TYPE = dynamic_import("mpfb.services.humanservice", "NEW_HUMAN_SKIN_TYPE")

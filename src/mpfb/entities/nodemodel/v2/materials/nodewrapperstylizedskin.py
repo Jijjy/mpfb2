@@ -8,15 +8,15 @@ group's map inputs:
 - SkinTone: the base colour, sRGB (0.80, 0.60, 0.48). data/settings/skin_tones.json holds 12
   swatches for the UI.
 - BloodMap: a painted grayscale mask of the warm areas. BloodTint (0.85, 0.35, 0.30) is mixed into
-  SkinTone through it at BloodStrength 0.10. This replaces SSS for the warm look.
-- CavityMap: baked AO. It is multiplied into the albedo at CavityStrength 0.15, and the cavity
+  SkinTone through it at BloodStrength 0.04. This replaces SSS for the warm look.
+- CavityMap: baked AO. It is multiplied into the albedo at CavityStrength 0.05, and the cavity
   colour is BloodTint rather than black, so cavities read warm, not grey.
-- Gradient: a vertical darkening of GradientStrength (4%) from the top of the head to the feet,
+- Gradient: a vertical darkening of GradientStrength (0 by default: off) from the top of the head to the feet,
   read from the object's Generated coordinate Z (0 at the soles, 1 at the top of the head), so it
   follows the body whatever its height or scale.
 - Roughness: the painted RoughnessMask maps 0..1 to RoughnessMin..RoughnessMax (0.4-0.6). The mask
   values are 0.75 for the body (0.55), 0.5 for the face (0.50) and 0.0 for the lips (0.40).
-- Specular IOR Level 0.35, Subsurface Weight 0.05 with radius (1.0, 0.35, 0.2) x SubsurfaceScale.
+- Specular IOR Level 0.35, Subsurface Weight 0 (off) by default, radius (1.0, 0.35, 0.2) x SubsurfaceScale.
   SubsurfaceScale is 0.5 cm in scene units; HumanService sets it from the human's scale factor.
 - Normal: none. No normal map, no micro-normal, no pore noise (spec R1).
 - Makeup: an optional sRGB decal mixed over the albedo by its alpha.
@@ -82,15 +82,15 @@ DEFAULT_SETTINGS = {
     "SkinTone": _linear_rgba(SKIN_TONE_SRGB),
     "BloodMap": 0.0,
     "BloodTint": _linear_rgba(BLOOD_TINT_SRGB),
-    "BloodStrength": 0.10,
+    "BloodStrength": 0.04,
     "CavityMap": 1.0,
-    "CavityStrength": 0.15,
-    "GradientStrength": 0.04,
+    "CavityStrength": 0.05,
+    "GradientStrength": 0.0,
     "RoughnessMask": 0.75,
     "RoughnessMin": 0.4,
     "RoughnessMax": 0.6,
     "SpecularIORLevel": 0.35,
-    "SubsurfaceWeight": 0.05,
+    "SubsurfaceWeight": 0.0,
     "SubsurfaceRadius": [1.0, 0.35, 0.2],
     "SubsurfaceScale": SUBSURFACE_SCALE_METERS,
     "Makeup": [0.0, 0.0, 0.0, 1.0],

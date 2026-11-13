@@ -706,7 +706,25 @@ class HumanService:
             subsurf.levels = 0
             subsurf.render_levels = subdiv_levels
 
+        if material_type == "MAKESKIN" and HumanService.has_stylized_skin(basemesh) \
+                and ObjectService.get_object_type(clothes) in HumanService.get_stylized_bodypart_presets():
+            # A brow, lash, tooth or tongue added to a stylized human matches it: flat colour, and on the
+            # stock brow and lash cards the solid stylized cut-out (STYLIZED_SPEC.md 5.3)
+            HumanService.recolour_stylized_bodyparts(basemesh, [clothes])
+
         return clothes
+
+    @staticmethod
+    def has_stylized_skin(basemesh: bpy.types.Object) -> bool:
+        """True when the basemesh's material is the STYLIZED skin (its node group carries the stylized skin's marker input)."""
+        from ..entities.nodemodel.v2.materials.nodewrapperstylizedskin import STYLIZED_SKIN_MARKER_KEY
+        if not MaterialService.has_materials(basemesh):
+            return False
+        skin = MaterialService.get_material(basemesh)
+        if not skin or not skin.node_tree:
+            return False
+        group_node = NodeService.find_first_node_by_type_name(skin.node_tree, "ShaderNodeGroup")
+        return bool(group_node) and STYLIZED_SKIN_MARKER_KEY in NodeService.get_socket_default_values(group_node)
 
     @staticmethod
     def set_stylized_eyes_material(eyes: bpy.types.Object, name: str | None = None) -> bpy.types.Material:
@@ -741,7 +759,7 @@ class HumanService:
             return json.load(json_file)
 
     @staticmethod
-    def recolour_stylized_bodyparts(basemesh: bpy.types.Object) -> list[bpy.types.Object]:
+    def recolour_stylized_bodyparts(basemesh: bpy.types.Object, bodyparts: list[bpy.types.Object] | None = None) -> list[bpy.types.Object]:
         """
         Recolour the human's teeth, tongue, eyebrows and eyelashes from the stylized presets
         (STYLIZED_SPEC.md 5.3): the Principled BSDF's Base Color is unlinked from its texture and set to the
@@ -752,6 +770,8 @@ class HumanService:
 
         Args:
             basemesh (bpy.types.Object): The human's basemesh.
+            bodyparts (list[bpy.types.Object] | None): Recolour only these objects (each by its own object
+                type's preset). Default: the nearest teeth, tongue, eyebrows and eyelashes of the human.
 
         Returns:
             list[bpy.types.Object]: The objects that were recoloured.
@@ -767,10 +787,14 @@ class HumanService:
                 if STYLIZED_SKIN_MARKER_KEY in values:
                     blood_tint = list(values[STYLIZED_SKIN_MARKER_KEY])
 
+        presets = HumanService.get_stylized_bodypart_presets()
+        if bodyparts is None:
+            targets = [(ObjectService.find_object_of_type_amongst_nearest_relatives(basemesh, object_type), preset) for object_type, preset in presets.items()]
+        else:
+            targets = [(bodypart, presets.get(ObjectService.get_object_type(bodypart))) for bodypart in bodyparts]
         recoloured = []
-        for object_type, preset in HumanService.get_stylized_bodypart_presets().items():
-            bodypart = ObjectService.find_object_of_type_amongst_nearest_relatives(basemesh, object_type)
-            if not bodypart or not MaterialService.has_materials(bodypart):
+        for bodypart, preset in targets:
+            if not bodypart or not preset or not MaterialService.has_materials(bodypart):
                 continue
             material = bodypart.material_slots[0].material
             if not material or not material.node_tree:

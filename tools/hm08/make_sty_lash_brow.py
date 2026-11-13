@@ -7,7 +7,7 @@ Writes sty_lash.png and sty_brow.png (1024², RGBA, near-black RGB, the shape in
 - lashes: each lash card is a quad-grid strip; the painter finds every UV island, its four corners
   and its root/tip and inner/outer sides from the card's own obj, gives each face corner a strip
   coordinate (s along the strip, 0 at the inner corner; t across it, 0 at the lid root) and
-  rasterises the wing in those coordinates. Upper cards hold one solid tapered wing from the root, thin at the inner corner, widening
+  rasterises the wing in those coordinates. Upper cards hold one solid tapered wing from the root, half the card at the inner corner, widening
   outwards and ending in a pointed flick at the outer corner; lower cards stay empty.
 - brows: the brow card is not a clean grid (its tail ends in a point), and its outline is already a
   brow: a blunt head at the inner end tapering to a pointed tail. The card is filled solid, inset by
@@ -159,10 +159,10 @@ def smoothstep(x):
 
 
 def lash_wing(s, t):
-    """Solid wing from the lid root: 30% of the card at the inner corner, 80% at 80% along, then a
-    pointed flick: the lower edge rises to meet the upper one at the outer end."""
-    top = 0.30 + 0.50 * smoothstep(s / 0.8) + 0.12 * smoothstep((s - 0.8) / 0.2)
-    bottom = 0.88 * smoothstep((s - 0.78) / 0.22) ** 1.3
+    """Solid wing from the lid root: 55% of the card at the inner corner, the full card from 60% along,
+    then a pointed flick: the lower edge rises to meet the upper one at the outer end."""
+    top = 0.55 + 0.45 * smoothstep(s / 0.6)
+    bottom = 0.85 * smoothstep((s - 0.80) / 0.20) ** 1.3
     return (t >= bottom - 0.02) & (t <= top) & (s >= 0.015) & (s <= 0.985)
 
 

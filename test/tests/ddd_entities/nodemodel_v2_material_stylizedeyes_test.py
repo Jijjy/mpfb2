@@ -9,7 +9,7 @@ NodeWrapperMpfbStylizedEyes = dynamic_import("mpfb.entities.nodemodel.v2.materia
 
 def test_stylized_eyes_shader():
     """Spec section 5.2: one group node carrying the eye settings key set, one opaque Principled
-    BSDF with roughness 0.05 and coat 0.5, no transmission, no alpha, catchlight emission 1.5."""
+    BSDF with roughness 0.5 and no coat, no transmission, no alpha, catchlight emission 1.5."""
     node_tree = NodeService.create_node_tree(ObjectService.random_name())
     NodeWrapperStylizedEyes.create_instance(node_tree)
     assert NodeWrapperStylizedEyes.validate_tree_against_original_def(fail_hard=True, node_tree=node_tree)
@@ -23,8 +23,8 @@ def test_stylized_eyes_shader():
     assert settings["LimbalRingWidth"] == approx(0.10)
     assert list(settings["IrisInner"]) == approx(list(settings["IrisOuter"]))  # one flat iris colour
     assert settings["CatchlightStrength"] == approx(1.5)
-    assert settings["Roughness"] == approx(0.05)
-    assert settings["Coat"] == approx(0.5)
+    assert settings["Roughness"] == approx(0.5)
+    assert settings["Coat"] == approx(0.0)
 
     group_nodes = group_node.node_tree.nodes
     principled = group_nodes["Principled BSDF"]

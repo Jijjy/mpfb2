@@ -10,13 +10,14 @@ Inside the group, a single Principled BSDF on one opaque mesh:
 
 - Sclera: flat ScleraColor (0.92, 0.90, 0.88), darkened by ScleraEdgeDarkening toward the edge
   of the eyeball. No veins.
-- Iris: a radial gradient from IrisInner (at the pupil) to IrisOuter, a dark limbal ring over
-  the outer LimbalRingWidth (10%) of the iris radius, and a pupil of radius PupilSize (0.35) of
+- Iris: a radial gradient from IrisInner (at the pupil) to IrisOuter, a dark limbal ring with a
+  hard edge over the outer LimbalRingWidth (10%) of the iris radius, and a pupil of radius PupilSize (0.35) of
   the iris radius. The defaults set IrisInner and IrisOuter to the same colour, so the iris is
   one flat colour; a preset can still set two for a gradient.
 - Catchlight: a painted ellipse at the upper outer side of the iris, coloured CatchlightColor,
   also fed to the emission at CatchlightStrength (1.5), so it reads the same under any light.
-- Shell: Roughness 0.05, Coat 0.5. No transmission, alpha stays 1.0 and is never linked.
+- Shell: Roughness 0.5, no coat: a glossy coat mirrors the lights as a pale band across the iris edge,
+  and the painted catchlight is the eye's only highlight. No transmission, alpha stays 1.0 and is never linked.
 
 The iris placement reads the eye UV layout the MakeHuman eye proxies share: one eye centred
 at UV (0.295, 0.30), the other at (0.705, 0.70), eyeball radius 0.285 in UV units (the same
@@ -72,7 +73,7 @@ CATCHLIGHT_ASPECT = 0.7
 SCLERA_EDGE_START = 0.6
 
 # Smoothstep band, in iris-local units, at the pupil and the iris border
-EDGE_SOFTNESS = 0.03
+EDGE_SOFTNESS = 0.015
 
 DEFAULT_SETTINGS = {
     "ScleraColor": [0.92, 0.90, 0.88, 1.0],
@@ -87,8 +88,8 @@ DEFAULT_SETTINGS = {
     "CatchlightColor": [1.0, 1.0, 1.0, 1.0],
     "CatchlightStrength": 1.5,
     "CatchlightSize": 0.28,
-    "Roughness": 0.05,
-    "Coat": 0.5
+    "Roughness": 0.5,
+    "Coat": 0.0
     }
 
 
@@ -135,7 +136,7 @@ _GROUP_NODES = [
     ("ShaderNodeMath", "Limbal start", {"location": [-400.0, 600.0], "operation": "SUBTRACT"}, {"Value": 1.0}),
     ("ShaderNodeMapRange", "Iris gradient pos", {"location": [-200.0, 800.0], "clamp": True}, {}),
     ("ShaderNodeMix", "Iris gradient", {"location": [0.0, 800.0], "data_type": "RGBA", "clamp_factor": True}, {}),
-    ("ShaderNodeMath", "Limbal soft end", {"location": [-200.0, 550.0], "operation": "MULTIPLY_ADD"}, {"Value_001": 0.5}),
+    ("ShaderNodeMath", "Limbal soft end", {"location": [-200.0, 550.0], "operation": "ADD"}, {"Value_001": EDGE_SOFTNESS}),
     ("ShaderNodeMapRange", "Limbal mask", {"location": [0.0, 550.0], "interpolation_type": "SMOOTHSTEP", "clamp": True}, {}),
     ("ShaderNodeMix", "With limbal ring", {"location": [200.0, 700.0], "data_type": "RGBA", "clamp_factor": True}, {}),
     ("ShaderNodeMath", "Pupil edge", {"location": [0.0, 350.0], "operation": "ADD"}, {"Value_001": EDGE_SOFTNESS}),
@@ -208,8 +209,7 @@ _GROUP_LINKS = [
     ("Iris gradient pos", "Result", "Iris gradient", "Factor_Float"),
     ("Group Input", "IrisInner", "Iris gradient", "A_Color"),
     ("Group Input", "IrisOuter", "Iris gradient", "B_Color"),
-    ("Group Input", "LimbalRingWidth", "Limbal soft end", "Value"),
-    ("Limbal start", "Value", "Limbal soft end", "Value_002"),
+    ("Limbal start", "Value", "Limbal soft end", "Value"),
     ("Iris r", "Value", "Limbal mask", "Value"),
     ("Limbal start", "Value", "Limbal mask", "From Min"),
     ("Limbal soft end", "Value", "Limbal mask", "From Max"),
