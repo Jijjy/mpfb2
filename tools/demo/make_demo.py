@@ -22,6 +22,13 @@ A character file holds these keys; all but "name" are optional and default to DE
     eyebrows, eyelashes, teeth, tongue, hair, shoes
                 an asset name (the directory under the asset library's eyebrows/, hair/, clothes/, ...),
                 or null for none
+    hair        also takes a curve hairstyle from the hair-editor asset pack, converted to clump cards:
+                    {"pack": "short_hedgehog", "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 30, ...},
+                     "color": [r, g, b]}
+                "pack" is an object name in the pack's hair.blend. "cards" holds the hair editor's card
+                settings (DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS keys); cards_mode defaults to CLUMP and is
+                the only mode allowed, since the stylized hair material has no alpha. "color" is the tip
+                colour of the stylized hair material, linear RGB 0 to 1; the root is 15% darker.
     clothes     a list of clothes asset names
     rig         a built-in rig name, or null for none
     pose        null, a pose name from data/poses/<rig>_fk/, or a path to a pose JSON relative to the
@@ -59,6 +66,8 @@ RACE_KEYS = ("african", "asian", "caucasian")
 # (key, asset library subdirectory, object type for add_mhclo_asset)
 BODYPARTS = (("eyebrows", "eyebrows", "Eyebrows"), ("eyelashes", "eyelashes", "Eyelashes"),
              ("teeth", "teeth", "Teeth"), ("tongue", "tongue", "Tongue"), ("hair", "hair", "Hair"))
+CURVE_HAIR_KEYS = ("pack", "cards", "color")
+CURVE_HAIR_MODE = "CLUMP"
 EYES_ASSET = "high-poly"
 # (name, camera yaw in degrees: 0 looks at the face, 90 at the character's left side)
 VIEWS = (("front", 0.0), ("three_quarter", 35.0), ("side", 90.0))
@@ -121,11 +130,42 @@ def load_character(path):
     bad = set(char["eyes"]) - set(_settings("eye_settings.stylized.json"))
     if bad:
         raise ValueError(f"{path}: unknown eye settings {sorted(bad)}")
+    if isinstance(char["hair"], dict):
+        char["hair"] = _check_curve_hair(path, char["hair"])
+    elif char["hair"] is not None and not isinstance(char["hair"], str):
+        raise ValueError(f"{path}: hair is an asset name, a curve hairstyle object or null")
     if not isinstance(char["clothes"], list):
         raise ValueError(f"{path}: clothes is a list of asset names")
     if char["pose"] is not None and char["rig"] is None:
         raise ValueError(f"{path}: a pose needs a rig")
     return char
+
+
+def _check_curve_hair(path, hair):
+    """Check a curve hairstyle and fill in its defaults. Raises ValueError."""
+    bad = set(hair) - set(CURVE_HAIR_KEYS)
+    if bad:
+        raise ValueError(f"{path}: unknown hair keys {sorted(bad)}")
+    if not isinstance(hair.get("pack"), str) or not hair["pack"]:
+        raise ValueError(f"{path}: a curve hairstyle needs a \"pack\" object name")
+    cards = dict(hair.get("cards") or {})
+    cards.setdefault("cards_mode", CURVE_HAIR_MODE)
+    definitions = _import("ui.haireditorpanel.hairproperties", "DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS")
+    bad = set(cards) - set(definitions)
+    if bad:
+        raise ValueError(f"{path}: unknown hair card settings {sorted(bad)}")
+    if cards["cards_mode"] != CURVE_HAIR_MODE:
+        raise ValueError(f"{path}: hair cards_mode {cards['cards_mode']!r}: only {CURVE_HAIR_MODE} is supported")
+    for name, value in cards.items():
+        proptype, extra = definitions[name][:2]
+        if proptype == "int":
+            if isinstance(value, bool) or not isinstance(value, int) or not extra[0] <= value <= extra[1]:
+                raise ValueError(f"{path}: hair {name} {value!r} is not an integer from {extra[0]} to {extra[1]}")
+    color = hair.get("color")
+    if color is not None and (not isinstance(color, list) or len(color) != 3
+                              or not all(isinstance(c, (int, float)) and 0.0 <= c <= 1.0 for c in color)):
+        raise ValueError(f"{path}: hair color {color!r} is not three numbers from 0 to 1")
+    return {"pack": hair["pack"], "cards": cards, "color": color}
 
 
 def list_characters(names=None, directory=CHARACTERS_DIR):
@@ -196,7 +236,7 @@ def build_character(char):
     HumanService.add_mhclo_asset(_asset(EYES_ASSET, "eyes"), basemesh, asset_type="Eyes", subdiv_levels=1,
                                  material_type="MAKESKIN")
     for key, subdir, asset_type in BODYPARTS:
-        if char[key]:
+        if char[key] and isinstance(char[key], str):
             HumanService.add_mhclo_asset(_asset(char[key], subdir), basemesh, asset_type=asset_type, subdiv_levels=1,
                                          material_type="MAKESKIN")
     for name in char["clothes"] + ([char["shoes"]] if char["shoes"] else []):
@@ -217,6 +257,9 @@ def build_character(char):
     eye_settings.update(char["eyes"])
     NodeService.set_socket_default_values(_group_node(MaterialService.get_material(eyes)), eye_settings)
 
+    if isinstance(char["hair"], dict):
+        add_curve_hair(basemesh, char["hair"])
+
     if rig is not None and char["pose"]:
         bpy.ops.object.select_all(action="DESELECT")
         bpy.context.view_layer.objects.active = rig
@@ -225,6 +268,52 @@ def build_character(char):
         RigService.set_pose_from_dict(rig, _load_pose(char))
         bpy.ops.object.mode_set(mode="OBJECT")
     return basemesh
+
+
+def add_curve_hair(basemesh, hair):
+    """Apply a hair-editor pack hairstyle, convert it to cards with its settings, give the cards the stylized hair
+    material and hide the curves. Returns the card object."""
+    MaterialService, ObjectService = _import("services", "MaterialService", "ObjectService")
+    HairEditorService = _import("services.haireditorservices", "HairEditorService")
+    HAIR_PROPERTIES, CARDS_OBJECT_SUFFIX, PACK_NAME_PROPERTY = _import(
+        "ui.haireditorpanel.hairproperties", "HAIR_PROPERTIES", "CARDS_OBJECT_SUFFIX", "PACK_NAME_PROPERTY")
+    NodeWrapperStylizedHair, ROOT_DARKENING = _import(
+        "entities.nodemodel.v2.materials.nodewrapperstylizedhair", "NodeWrapperStylizedHair", "ROOT_DARKENING")
+    if HairEditorService.get_hair_blend_path() is None:
+        raise IOError("no hair-editor asset pack installed in the MPFB user data dir")
+
+    def run(operator, **kwargs):
+        ObjectService.deselect_and_deactivate_all()
+        ObjectService.activate_blender_object(basemesh)
+        if operator(**kwargs) != {"FINISHED"}:
+            raise RuntimeError(f"{operator.idname()}({kwargs}) did not finish")
+
+    before = set(ObjectService.get_list_of_children(basemesh))
+    run(bpy.ops.mpfb.apply_hair_operator, hair_asset=hair["pack"])
+    applied = [obj for obj in ObjectService.get_list_of_children(basemesh)
+               if obj not in before and obj.get(PACK_NAME_PROPERTY) == hair["pack"] and obj.type == "CURVES"]
+    if len(applied) != 1:
+        raise RuntimeError(f"applying hair {hair['pack']!r} left {len(applied)} hair objects")
+    hair_obj = applied[0]
+    for name, value in hair["cards"].items():
+        # As the panel's widget sets it: through the property registered on the object type
+        setattr(basemesh, f"{HAIR_PROPERTIES.dynamic_prefix}{hair_obj.name}_{name}", value)
+    run(bpy.ops.mpfb.generate_hair_cards_operator, hair_asset=hair_obj.name)
+    cards = bpy.data.objects[hair_obj.name + CARDS_OBJECT_SUFFIX]
+
+    material = MaterialService.create_empty_material(hair_obj.name + ".stylized", None)
+    NodeWrapperStylizedHair.create_instance(material.node_tree)
+    if hair["color"] is not None:
+        tip = list(hair["color"]) + [1.0]
+        nodes = material.node_tree.nodes
+        nodes["HairTip"].outputs["Color"].default_value = tip
+        nodes["HairRoot"].outputs["Color"].default_value = [c * ROOT_DARKENING for c in tip[:3]] + [1.0]
+    cards.data.materials.clear()
+    cards.data.materials.append(material)
+
+    hair_obj.hide_set(True)
+    hair_obj.hide_render = True
+    return cards
 
 
 def save_blend(char, directory):

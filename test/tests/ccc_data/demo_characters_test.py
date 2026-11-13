@@ -72,3 +72,37 @@ def test_builds_and_saves_one_character(out_dir):
     assert os.path.getsize(path) > 0
     assert not os.path.exists(path + "1")
     assert bpy.data.filepath != path
+
+
+def test_curve_hair_form(out_dir):
+    """The {"pack", "cards", "color"} hair form: checked by the loader, converted to clump cards with the stylized
+    hair material, the curves hidden. The build needs the hair-editor asset pack."""
+    char = make_demo.load_character(_write(out_dir, "curly", {"hair": {"pack": "short_hedgehog"}}))
+    assert char["hair"] == {"pack": "short_hedgehog", "cards": {"cards_mode": "CLUMP"}, "color": None}
+    for bad in ({"pack": "x", "style": 1}, {"cards": {}}, {"pack": "x", "cards": {"cards_mode": "TILES"}},
+                {"pack": "x", "cards": {"cards_wings": 1}}, {"pack": "x", "cards": {"cards_cluster_count": 1}},
+                {"pack": "x", "color": [2, 0, 0]}, 7):
+        with pytest.raises(ValueError):
+            make_demo.load_character(_write(out_dir, "bad", {"hair": bad}))
+
+    HairEditorService = make_demo._import("services.haireditorservices", "HairEditorService")
+    if HairEditorService.get_hair_blend_path() is None:
+        pytest.skip("the hair-editor asset pack is not installed")
+    MaterialService = make_demo._import("services", "MaterialService")
+    hp = make_demo._import("ui.haireditorpanel.hairproperties", "HAIR_PROPERTIES")
+    char = make_demo.load_character(_write(out_dir, "curly", {
+        "rig": None, "pose": None,
+        "hair": {"pack": "short_hedgehog", "cards": {"cards_cluster_count": 12, "cards_clump_max_tris": 3000},
+                 "color": [0.5, 0.2, 0.1]}}))
+    basemesh = make_demo.build_character(char)
+    hair = [o for o in basemesh.children if o.get("mpfb_pack_asset") == "short_hedgehog" and o.type == "CURVES"]
+    assert len(hair) == 1 and hair[0].hide_render
+    assert hp.get_value(f"{hair[0].name}_cards_mode", entity_reference=basemesh) == "CLUMP"
+    assert hp.get_value(f"{hair[0].name}_cards_cluster_count", entity_reference=basemesh) == 12
+    cards = bpy.data.objects[hair[0].name + "_cards"]
+    assert cards.type == "MESH" and not cards.hide_render and len(cards.data.polygons) > 0
+    assert len(cards.data.polygons) <= 3000
+    assert not cards.modifiers
+    nodes = MaterialService.get_material(cards).node_tree.nodes
+    assert list(nodes["HairTip"].outputs["Color"].default_value) == approx([0.5, 0.2, 0.1, 1.0])
+    assert list(nodes["HairRoot"].outputs["Color"].default_value) == approx([0.425, 0.17, 0.085, 1.0])
