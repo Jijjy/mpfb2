@@ -11,8 +11,9 @@ Inside the group, a single Principled BSDF on one opaque mesh:
 - Sclera: flat ScleraColor (0.92, 0.90, 0.88), darkened by ScleraEdgeDarkening toward the edge
   of the eyeball. No veins.
 - Iris: a radial gradient from IrisInner (at the pupil) to IrisOuter, a dark limbal ring over
-  the outer LimbalRingWidth (15%) of the iris radius, and a pupil of radius PupilSize (0.35) of
-  the iris radius.
+  the outer LimbalRingWidth (10%) of the iris radius, and a pupil of radius PupilSize (0.35) of
+  the iris radius. The defaults set IrisInner and IrisOuter to the same colour, so the iris is
+  one flat colour; a preset can still set two for a gradient.
 - Catchlight: a painted ellipse at the upper outer side of the iris, coloured CatchlightColor,
   also fed to the emission at CatchlightStrength (1.5), so it reads the same under any light.
 - Shell: Roughness 0.05, Coat 0.5. No transmission, alpha stays 1.0 and is never linked.
@@ -76,11 +77,11 @@ EDGE_SOFTNESS = 0.03
 DEFAULT_SETTINGS = {
     "ScleraColor": [0.92, 0.90, 0.88, 1.0],
     "ScleraEdgeDarkening": 0.25,
-    "IrisInner": [0.30, 0.55, 0.80, 1.0],
-    "IrisOuter": [0.08, 0.20, 0.45, 1.0],
+    "IrisInner": [0.10, 0.32, 0.70, 1.0],
+    "IrisOuter": [0.10, 0.32, 0.70, 1.0],
     "IrisSize": 0.39,
     "LimbalRingColor": [0.02, 0.025, 0.04, 1.0],
-    "LimbalRingWidth": 0.15,
+    "LimbalRingWidth": 0.10,
     "PupilColor": [0.0, 0.0, 0.0, 1.0],
     "PupilSize": 0.35,
     "CatchlightColor": [1.0, 1.0, 1.0, 1.0],

@@ -8,10 +8,10 @@ group's map inputs:
 - SkinTone: the base colour, sRGB (0.80, 0.60, 0.48). data/settings/skin_tones.json holds 12
   swatches for the UI.
 - BloodMap: a painted grayscale mask of the warm areas. BloodTint (0.85, 0.35, 0.30) is mixed into
-  SkinTone through it at BloodStrength 0.25. This replaces SSS for the warm look.
-- CavityMap: baked AO. It is multiplied into the albedo at CavityStrength 0.4, and the cavity
+  SkinTone through it at BloodStrength 0.10. This replaces SSS for the warm look.
+- CavityMap: baked AO. It is multiplied into the albedo at CavityStrength 0.15, and the cavity
   colour is BloodTint rather than black, so cavities read warm, not grey.
-- Gradient: a vertical darkening of GradientStrength (12%) from the top of the head to the feet,
+- Gradient: a vertical darkening of GradientStrength (4%) from the top of the head to the feet,
   read from the object's Generated coordinate Z (0 at the soles, 1 at the top of the head), so it
   follows the body whatever its height or scale.
 - Roughness: the painted RoughnessMask maps 0..1 to RoughnessMin..RoughnessMax (0.4-0.6). The mask
@@ -82,10 +82,10 @@ DEFAULT_SETTINGS = {
     "SkinTone": _linear_rgba(SKIN_TONE_SRGB),
     "BloodMap": 0.0,
     "BloodTint": _linear_rgba(BLOOD_TINT_SRGB),
-    "BloodStrength": 0.25,
+    "BloodStrength": 0.10,
     "CavityMap": 1.0,
-    "CavityStrength": 0.4,
-    "GradientStrength": 0.12,
+    "CavityStrength": 0.15,
+    "GradientStrength": 0.04,
     "RoughnessMask": 0.75,
     "RoughnessMin": 0.4,
     "RoughnessMax": 0.6,

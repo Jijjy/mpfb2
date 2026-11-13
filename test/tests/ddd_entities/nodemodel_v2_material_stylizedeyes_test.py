@@ -20,7 +20,8 @@ def test_stylized_eyes_shader():
     settings = NodeService.get_socket_default_values(group_node)
     assert list(settings["ScleraColor"])[:3] == approx([0.92, 0.90, 0.88])
     assert settings["PupilSize"] == approx(0.35)
-    assert settings["LimbalRingWidth"] == approx(0.15)
+    assert settings["LimbalRingWidth"] == approx(0.10)
+    assert list(settings["IrisInner"]) == approx(list(settings["IrisOuter"]))  # one flat iris colour
     assert settings["CatchlightStrength"] == approx(1.5)
     assert settings["Roughness"] == approx(0.05)
     assert settings["Coat"] == approx(0.5)

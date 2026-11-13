@@ -9,15 +9,15 @@
     "CatchlightStrength": 1.5,
     "Coat": 0.5,
     "IrisInner": [
-        0.3,
-        0.55,
-        0.8,
+        0.1,
+        0.32,
+        0.7,
         1.0
     ],
     "IrisOuter": [
-        0.08,
-        0.2,
-        0.45,
+        0.1,
+        0.32,
+        0.7,
         1.0
     ],
     "IrisSize": 0.39,
@@ -27,7 +27,7 @@
         0.04,
         1.0
     ],
-    "LimbalRingWidth": 0.15,
+    "LimbalRingWidth": 0.1,
     "PupilColor": [
         0.0,
         0.0,

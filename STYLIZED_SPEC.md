@@ -153,9 +153,9 @@ One Principled BSDF, exportable to glTF/FBX. Group inputs:
 |---|---|---|
 | `SkinTone` | sRGB (0.80, 0.60, 0.48) | Plus 12 swatches in `data/settings/skin_tones.json`. |
 | `BloodMap` | `data/textures/sty_bloodmap.png` (1024²) | Painted mask of warm areas: cheeks, nose tip, ears, lips, knuckles, elbows, knees, palms, soles. Painted fresh in HM08's existing UV layout (master's `sty01_bloodmap.png` is for sty01 UVs and cannot be reused). |
-| `BloodTint` | (0.85, 0.35, 0.30), strength 0.25 | Mixed into `SkinTone` through `BloodMap`. Replaces SSS for the warm look. |
-| `CavityMap` | AO baked from the HM08 base mesh | Multiplied in at 0.4, tinted toward `BloodTint`, so folds read warm and not grey. |
-| `Gradient` | −12% head to feet | Object-space gradient, keeps attention on the face. |
+| `BloodTint` | (0.85, 0.35, 0.30), strength 0.10 | Mixed into `SkinTone` through `BloodMap`. Replaces SSS for the warm look. |
+| `CavityMap` | AO baked from the HM08 base mesh | Multiplied in at 0.15, tinted toward `BloodTint`, so folds read warm and not grey. |
+| `Gradient` | −4% head to feet | Object-space gradient, keeps attention on the face. |
 | Roughness | 0.55 (face 0.50, lips 0.40) | Painted mask; range 0.4–0.6. |
 | Specular IOR Level | 0.35 | Takes the plastic edge off. |
 | Subsurface Weight | 0.05, may be 0 | Radius (1.0, 0.35, 0.2) × 0.5 cm. |
@@ -172,7 +172,7 @@ Needed for Fortnite/Overwatch-style delivery, so it is Phase 3, not optional.
 ### 5.2 `STYLIZED_EYES`
 
 - **Sclera:** flat (0.92, 0.90, 0.88), a soft darker edge, no veins.
-- **Iris:** two-colour radial gradient `IrisInner` → `IrisOuter`, dark limbal ring at 15% width,
+- **Iris:** one flat colour by default (`IrisInner` = `IrisOuter`; a preset may set a gradient), dark limbal ring at 10% width,
   pupil radius 0.35 of the iris; the iris fills about 55% of the visible opening.
 - **Catchlight:** painted elliptical highlight at the upper outer side, emission 1.5, so it
   reads the same under any light.
