@@ -79,11 +79,15 @@ def build_cards_for_asset(context, basemesh, hair_obj, card_name, is_fur, proper
             )
         depsgraph = context.evaluated_depsgraph_get()
 
+        samples = int(properties.get_value(
+            f"{asset_name}_cards_cluster_samples", 24, entity_reference=basemesh))
         if mode == cg.CARDS_MODE_CLUSTER_BOX:
             data = HairCardService.build_cluster_box_mesh(hair_obj, *cluster_settings, depsgraph=depsgraph)
+        elif mode == cg.CARDS_MODE_CLUMP:
+            max_tris = int(properties.get_value(
+                f"{asset_name}_cards_clump_max_tris", 5000, entity_reference=basemesh))
+            data = HairCardService.build_clump_mesh(hair_obj, *cluster_settings, samples, max_tris, depsgraph=depsgraph)
         else:
-            samples = int(properties.get_value(
-                f"{asset_name}_cards_cluster_samples", 24, entity_reference=basemesh))
             data = HairCardService.build_cluster_ribbon_mesh(hair_obj, *cluster_settings, samples, depsgraph=depsgraph)
 
         if data is None:
@@ -96,8 +100,8 @@ def build_cards_for_asset(context, basemesh, hair_obj, card_name, is_fur, proper
         card_obj.matrix_parent_inverse = hair_obj.matrix_parent_inverse.copy()
         card_obj.matrix_basis = hair_obj.matrix_basis.copy()
 
-        # Cluster boxes are a finished mesh, ribbons are shaped by a node group
-        if mode == cg.CARDS_MODE_CLUSTER_BOX:
+        # Cluster boxes and clumps are a finished mesh, ribbons are shaped by a node group
+        if mode in cg.PYTHON_MESH_MODES:
             return card_obj, False
 
         modifier = card_obj.modifiers.new(name=CARDS_MODIFIER_NAME, type='NODES')

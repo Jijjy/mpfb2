@@ -186,7 +186,8 @@ DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS = {
         "cards_cluster_count": ("int", (4, 500), 40, "Number of cluster cards to generate (cluster modes only)"),
         "cards_cluster_min_strands": ("int", (1, 50), 3, "Minimum strands required to form a cluster card (cluster modes only)"),
         "cards_cluster_seed": ("int", (0, 9999), 0, "Random seed for the clustering (cluster modes only)"),
-        "cards_cluster_samples": ("int", (2, 128), 24, "How many points each bundle's averaged curve is built from (cluster ribbon mode only)"),
+        "cards_cluster_samples": ("int", (2, 128), 24, "How many points each bundle's averaged curve is built from (cluster ribbon and clump modes only)"),
+        "cards_clump_max_tris": ("int", (100, 100000), 5000, "Triangle budget for the whole style: nearest clumps are merged until it fits (clump mode only)"),
         }
 
 def create_cards_config_properties(config_set, basemesh, asset_name):

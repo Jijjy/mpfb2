@@ -151,8 +151,14 @@ class MPFB_PT_Hair_Editor_Panel(Abstract_Panel):
     def _card_count_estimate(self, basemesh, layout, asset_name, properties, mode):
         """Roughly how many cards the current settings will produce."""
         if mode in cg.CLUSTER_MODES:
-            count = properties.get_value(f"{asset_name}_cards_cluster_count", 40, entity_reference=basemesh)
-            layout.label(text=f"~ {int(count)} cards", icon='INFO')
+            count = int(properties.get_value(f"{asset_name}_cards_cluster_count", 40, entity_reference=basemesh))
+            if mode == cg.CARDS_MODE_CLUMP:
+                samples = int(properties.get_value(f"{asset_name}_cards_cluster_samples", 24, entity_reference=basemesh))
+                max_tris = int(properties.get_value(f"{asset_name}_cards_clump_max_tris", 5000, entity_reference=basemesh))
+                count = min(count, max(1, max_tris // HairCardService.clump_triangle_count(max(2, samples - 1))))
+                layout.label(text=f"~ {count} clumps at most", icon='INFO')
+                return
+            layout.label(text=f"~ {count} cards", icon='INFO')
             return
         if mode not in cg.STRAND_BASED_MODES:
             return
@@ -191,6 +197,9 @@ class MPFB_PT_Hair_Editor_Panel(Abstract_Panel):
                                     ["cards_cluster_count", "cards_cluster_min_strands", "cards_cluster_seed"])
             if mode == cg.CARDS_MODE_CLUSTER_RIBBON:
                 self._draw_cards_props(basemesh, box, asset_name, properties, ["cards_cluster_samples"])
+            elif mode == cg.CARDS_MODE_CLUMP:
+                self._draw_cards_props(basemesh, box, asset_name, properties,
+                                        ["cards_cluster_samples", "cards_clump_max_tris"])
             box.label(text="Clustering happens on Regenerate", icon='FILE_REFRESH')
 
         self._card_count_estimate(basemesh, box, asset_name, properties, mode)
@@ -676,7 +685,7 @@ class MPFB_PT_Hair_Editor_Panel(Abstract_Panel):
 
         mode_box.label(text="Mode applies on Regenerate", icon='FILE_REFRESH')
 
-        # Cards computed in python (cluster boxes) have no live node group to edit
+        # Cards computed in python (cluster boxes, clumps) have no live node group to edit
         if has_cards_generator(asset_name):
             self._placement_section(basemesh, mode_box, asset_name, properties, mode)
             self._card_shape_section(basemesh, mode_box, asset_name, properties, mode)
