@@ -3,6 +3,7 @@ from .abstractmaterialwrapper import AbstractMaterialWrapper
 from .nodewrapperskin import NodeWrapperSkin
 from .nodewrappergameengine import NodeWrapperGameEngine
 from .nodewrapperstylizedeyes import NodeWrapperStylizedEyes
+from .nodewrapperstylizedhair import NodeWrapperStylizedHair
 from .nodewrapperstylizedskin import NodeWrapperStylizedSkin
 
 MATERIAL_WRAPPERS = dict()
@@ -14,5 +15,6 @@ __all__ = [
     "NodeWrapperSkin",
     "NodeWrapperGameEngine",
     "NodeWrapperStylizedEyes",
+    "NodeWrapperStylizedHair",
     "NodeWrapperStylizedSkin"
     ]
