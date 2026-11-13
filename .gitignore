@@ -157,3 +157,4 @@ non-coding-efforts/
 
 # Demo character output (tools/demo/make_demo.py)
 tools/demo/out/
+.ticketz/
