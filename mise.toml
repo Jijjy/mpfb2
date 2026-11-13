@@ -1,0 +1,6 @@
+[env]
+BLENDER_USER_RESOURCES = "{{config_root}}/target/tmp/blender-user"
+
+[tasks.demo]
+description = "Build and render the demo characters (args: [--no-render] [--samples N] [name ...])"
+run = "blender -b --python-use-system-env -P tools/demo/make_demo.py --"

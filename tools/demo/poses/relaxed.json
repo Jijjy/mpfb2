@@ -1,0 +1,10 @@
+{
+    "skeleton_type": "default",
+    "bone_rotations": {
+        "upperarm01.L": [0.0, 0.0, -0.55],
+        "upperarm01.R": [0.0, 0.0, 0.55],
+        "lowerarm01.L": [0.0, 0.0, -0.15],
+        "lowerarm01.R": [0.0, 0.0, 0.15]
+    },
+    "bone_translations": {}
+}
