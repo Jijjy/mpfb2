@@ -315,7 +315,7 @@ def test_cards_are_generated_in_every_mode(hair_character, mode):
     assert hair_character.flag("generated")
     assert hair_character.get("cards_mode") == mode, "the mode picked before converting has to be the one used"
     has_generator = hp.CARDS_MODIFIER_NAME in card_obj.modifiers
-    assert has_generator == (mode != cg.CARDS_MODE_CLUSTER_BOX), "only cluster boxes are a finished mesh"
+    assert has_generator == (mode not in cg.PYTHON_MESH_MODES), "cluster boxes and clumps are a finished mesh, the rest a generator"
 
     probe = card_obj.copy()
     probe.data = card_obj.data.copy()
