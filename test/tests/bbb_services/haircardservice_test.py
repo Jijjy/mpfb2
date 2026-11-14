@@ -80,3 +80,37 @@ def test_clump_rings_keep_their_width_when_the_side_count_drops():
         assert len(morphed) == count and [v[0] for v in morphed] == sorted(v[0] for v in morphed)
         for step in range(36):
             assert extent(morphed, step * math.pi / 36) == pytest.approx(extent(plain, step * math.pi / 36))
+
+
+def test_groom_clumps_keep_a_parting_open_and_flow_keeps_strand_lengths():
+    """Strands either side of a parting (x = 0) sweep opposite ways: no clump takes strands from both sides, even when
+    the roots are so close that k-means alone would straddle it, and the flow pass keeps every strand's length."""
+    import numpy as np
+
+    strands = []
+    for row in range(8):
+        for column in range(-4, 4):
+            x = 0.01 * column + 0.005
+            side = 1.0 if x > 0 else -1.0
+            wobble = 0.004 * math.sin(3.0 * row + column)
+            strands.append([(x + side * 0.02 * step + wobble * step, 0.01 * row, 0.005 * step) for step in range(6)])
+    curves = bpy.data.hair_curves.new("haircard_parting")
+    curves.add_curves([len(strand) for strand in strands])
+    curves.points.foreach_set("position", [c for strand in strands for point in strand for c in point])
+    hair_obj = bpy.data.objects.new("haircard_parting", curves)
+    bpy.context.collection.objects.link(hair_obj)
+    bpy.context.view_layer.update()
+
+    plain = HairCardService.read_groom_clumps(hair_obj, 3, 1, 0, None, 0)
+    flowed = HairCardService.read_groom_clumps(hair_obj, 3, 1, 0, None, 5)
+    sides = plain["roots"][:, 0] > 0.0
+    for clustered in (plain, flowed):
+        for label in np.unique(clustered["assignments"]):
+            assert len(set(sides[clustered["assignments"] == label])) == 1
+
+    def lengths(clustered):
+        points = clustered["positions"].reshape(len(strands), 6, 3)
+        return np.linalg.norm(np.diff(points, axis=1), axis=2).sum(axis=1)
+
+    assert np.allclose(lengths(plain), lengths(flowed))
+    assert not np.allclose(plain["positions"], flowed["positions"])
