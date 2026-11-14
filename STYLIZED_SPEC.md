@@ -149,8 +149,10 @@ Only after B is signed off.
 - Extend `services/haircardservice.py` with a `CLUMP` `CARDS_MODE`: guide curves grouped by the
   existing CLUSTER_BOX PCA code, each clump a closed tapered tube (6 sides at the root, 3 at
   the tip, 2:1 flattened), `max_tris` input, no alpha. On `master`: commit `6149243f`.
-- Hair shader `nodewrapperstylizedhair.py`: root-to-tip gradient, one anisotropic sheen band,
-  roughness 0.45, no alpha. On `master`: commit `64a63bf3`.
+- Hair shader `nodewrapperstylizedhair.py`: matte (roughness 0.85, low specular, no
+  anisotropy), root-to-tip gradient with painted strand grooves and a painted highlight band in
+  the albedo, no alpha. The glossy anisotropic first version (`master` commit `64a63bf3`) read
+  as plastic on the solid clump tubes (ticket 67).
 - Existing alpha-card modes stay. `CLUMP` becomes the default only if the user says so.
 
 ## 7. Acceptance
