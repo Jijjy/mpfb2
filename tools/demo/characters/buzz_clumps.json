@@ -1,0 +1,12 @@
+{
+    "name": "buzz_clumps",
+    "stylization": 1.0,
+    "skin_tone": "Default",
+    "hair": {
+        "pack": "short_cap",
+        "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 24, "cards_cluster_samples": 5, "cards_clump_max_tris": 5000, "cards_clump_width": 4.0, "cards_clump_tip": 1.0},
+        "color": [0.015, 0.012, 0.01]
+    },
+    "rig": "default",
+    "pose": "../poses/relaxed.json"
+}

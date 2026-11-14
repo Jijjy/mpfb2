@@ -1,0 +1,12 @@
+{
+    "name": "ponytail_clumps",
+    "stylization": 1.0,
+    "skin_tone": "Default",
+    "hair": {
+        "pack": "short_ponnytail",
+        "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 20, "cards_cluster_samples": 32, "cards_clump_max_tris": 14000, "cards_clump_width": 3.5, "cards_clump_tip": 0.4},
+        "color": [0.35, 0.18, 0.06]
+    },
+    "rig": "default",
+    "pose": "../poses/relaxed.json"
+}
