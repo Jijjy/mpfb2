@@ -151,8 +151,12 @@ Only after B is signed off.
   the tip, 2:1 flattened), `max_tris` input, no alpha. On `master`: commit `6149243f`.
 - Hair shader `nodewrapperstylizedhair.py`: matte (roughness 0.85, low specular, no
   anisotropy), root-to-tip gradient with painted strand grooves and a painted highlight band in
-  the albedo, no alpha. The glossy anisotropic first version (`master` commit `64a63bf3`) read
-  as plastic on the solid clump tubes (ticket 67).
+  the albedo. The glossy anisotropic first version (`master` commit `64a63bf3`) read
+  as plastic on the solid clump tubes (ticket 67). Contact and depth cues (ticket 71): a root
+  shade along V, cel-cut ambient occlusion in the crevices, and a soft hairline: the CLUMP hair
+  cap carries `mpfb_hairline` (1 on its border) and the shader's alpha is 1 minus it, so the
+  cap's dark rim fades over the skin as a contact shadow. Tubes stay opaque. `cards_clump_strays`
+  adds thin stray strands off the clumps.
 - Existing alpha-card modes stay. `CLUMP` becomes the default only if the user says so.
 
 ## 7. Acceptance

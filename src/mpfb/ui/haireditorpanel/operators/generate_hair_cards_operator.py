@@ -98,7 +98,8 @@ def build_cards_for_asset(context, basemesh, hair_obj, card_name, is_fur, proper
                                                     width=width, tip_radius=tip,
                                                     flatten=float(clump_value("flatten", cg.CLUMP_FLATTEN)),
                                                     flow_passes=int(clump_value("flow", 0)),
-                                                    surface_obj=surface_obj, cap_offset=cap, hug=hug)
+                                                    surface_obj=surface_obj, cap_offset=cap, hug=hug,
+                                                    strays=int(clump_value("strays", 0)))
         else:
             data = HairCardService.build_cluster_ribbon_mesh(hair_obj, *cluster_settings, samples, depsgraph=depsgraph)
 

@@ -13,7 +13,8 @@
             "cards_clump_flatten": 0.2,
             "cards_clump_flow": 15,
             "cards_clump_hug": 1.0,
-            "cards_clump_cap": 0.003
+            "cards_clump_cap": 0.003,
+            "cards_clump_strays": 8
         },
         "color": [
             0.03,

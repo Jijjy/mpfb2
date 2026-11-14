@@ -109,4 +109,4 @@ def test_curve_hair_form(out_dir):
     assert not cards.modifiers
     nodes = MaterialService.get_material(cards).node_tree.nodes
     assert list(nodes["HairTip"].outputs["Color"].default_value) == approx([0.5, 0.2, 0.1, 1.0])
-    assert list(nodes["HairRoot"].outputs["Color"].default_value) == approx([0.425, 0.17, 0.085, 1.0])
+    assert list(nodes["HairRoot"].outputs["Color"].default_value) == approx([0.375, 0.15, 0.075, 1.0])

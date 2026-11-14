@@ -145,6 +145,13 @@ _GUIDE_BREAK_DISTANCE = (2.0, 4.0)
 _CLUMP_CAP_CUTS = 2
 _CLUMP_CAP_REACH = 0.008
 _CLUMP_CAP_BORDER_SMOOTHING = 4
+# Soft hairline: the cap's HAIRLINE_ATTRIBUTE runs from 1 on its border to 0 this far inside (metres); the stylized hair
+# shader fades the cap out over it. Same name as in nodewrapperstylizedhair.py (entities do not import services)
+HAIRLINE_ATTRIBUTE = "mpfb_hairline"
+_CLUMP_HAIRLINE_WIDTH = 0.01
+# Stray strands: root radius (metres), and how far the tip drifts off its strand, as a fraction of the strand length
+_STRAY_RADIUS = 0.0007
+_STRAY_DRIFT = 0.12
 
 # The UV map that the tiles / ribbon / cluster modes lay out and which the bake packs into the atlas
 CARDS_UV_MAP = "UVMap"
@@ -2029,12 +2036,15 @@ class HairCardService():
 
     @staticmethod
     def _cut_hair_cap(mesh: bpy.types.Mesh, cap_faces: set[int], tree: Any, roots: "np.ndarray", to_surface: Any,
-                      cap_offset: float) -> "tuple[np.ndarray, list[tuple[int, ...]]] | None":
+                      cap_offset: float) -> "tuple[np.ndarray, list[tuple[int, ...]], np.ndarray] | None":
         """The hair cap: ``cap_faces`` of the body ``mesh`` cut ``_CLUMP_CAP_CUTS`` times, every face further than
         ``_CLUMP_CAP_REACH`` from the nearest strand root dropped, the border smoothed so the hairline is not a staircase
         of body faces, and every vertex put ``cap_offset`` above the body along its normal (``tree``: BVH of the body).
 
-        Returns (vertices in hair local space, faces) or None if nothing is left.
+        Each vertex also gets its hairline value: 1 on the border, falling linearly to 0 at ``_CLUMP_HAIRLINE_WIDTH``
+        from the nearest border vertex.
+
+        Returns (vertices in hair local space, faces, hairline values) or None if nothing is left.
         """
         import bmesh
         import numpy as np
@@ -2088,16 +2098,26 @@ class HairCardService():
                 lifted = vert.co + normal * cap_offset if location is not None else vert.co
                 cap_verts.append(tuple(to_hair @ lifted))
             faces = [tuple(vert.index for vert in face.verts) for face in bm.faces]
+            border = [vert.co.copy() for vert in bm.verts if vert.is_boundary]
+            hairline = np.zeros(len(cap_verts))
+            if border:
+                border_tree = KDTree(len(border))
+                for index, co in enumerate(border):
+                    border_tree.insert(co, index)
+                border_tree.balance()
+                for vert in bm.verts:
+                    distance = border_tree.find(vert.co)[2]
+                    hairline[vert.index] = max(0.0, 1.0 - distance / _CLUMP_HAIRLINE_WIDTH)
         finally:
             bm.free()
-        return np.array(cap_verts), faces
+        return np.array(cap_verts), faces, hairline
 
     @staticmethod
     def build_clump_mesh(hair_obj: bpy.types.Object, cluster_count: int, min_strands: int, seed: int, samples: int, max_tris: int,
                          depsgraph: bpy.types.Depsgraph | None = None, width: float = 1.0,
                          tip_radius: float = _CLUMP_TIP_RADIUS, flatten: float = CLUMP_FLATTEN,
                          flow_passes: int = 0, surface_obj: bpy.types.Object | None = None, cap_offset: float = 0.0,
-                         hug: float = 0.0) -> bpy.types.Mesh | None:
+                         hug: float = 0.0, strays: int = 0) -> bpy.types.Mesh | None:
         """Build one closed, tapered tube per clump of nearby strands.
 
         Each clump follows its members' averaged curve
@@ -2122,7 +2142,11 @@ class HairCardService():
         of each clump down onto the scalp, its root half sunk into the cap. A ``cap_offset`` above 0 adds a hair cap:
         the body faces the hair grows from (``_fur_bearing_faces_in``, one ring dilated), lifted that far off the skin, in
         the same mesh and material (V 0, the root colour), so no bare scalp shows between clumps. The cap is not counted
-        against ``max_tris``.
+        against ``max_tris``. The cap's ``HAIRLINE_ATTRIBUTE`` (point float) rises from 0 inside to 1 on its border, for
+        the shader's soft hairline; it is 0 on everything else.
+        ``strays`` thin three-sided tubes follow single strands picked by ``seed``, drifting off them towards the tip, so
+        a few fly-aways break the clumps' outline. Each stray moves with the nearest clump when the clumps are laid on the
+        scalp. They are not counted against ``max_tris``.
 
         Returns bpy.types.Mesh, or None if no clump qualified or one clump alone does not fit in ``max_tris``.
         """
@@ -2185,16 +2209,19 @@ class HairCardService():
             spread = member_roots - member_roots.mean(axis=0)
             root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())) * width, _CLUMP_MIN_RADIUS)
             clumps.append([curve, eigvecs[:, 0], root_radius, None])
+        unlaid = [clump[0].copy() for clump in clumps]
 
         ring_radius = [1.0 - (1.0 - tip_radius) * ring / (ring_count - 1) for ring in range(ring_count)] + [tip_radius]
         flat_scale = max(0.01, float(flatten)) / CLUMP_FLATTEN
+        hairline = []
         if surface_obj is not None and clumps:
             cap = HairCardService._lay_clumps_on_scalp(clumps, surface_obj, hair_obj, roots, target, ring_radius,
                                                        flatten, cap_offset, hug, depsgraph)
             if cap is not None:
-                cap_verts, cap_faces = cap
+                cap_verts, cap_faces, cap_hairline = cap
                 base = len(verts)
                 verts.extend(tuple(co) for co in cap_verts)
+                hairline.extend(float(value) for value in cap_hairline)
                 for polygon in cap_faces:
                     add_face(tuple((base + index, 0.5, 0.0) for index in polygon))
 
@@ -2256,6 +2283,9 @@ class HairCardService():
                 apex_u = 0.5 * (fractions[last][side] + fractions[last][side + 1])
                 add_face((corner(last, side), corner(last, side + 1), (apex, apex_u, 1.0)))
 
+        if strays > 0 and clumps:
+            HairCardService._add_strays(clustered, clumps, unlaid, target, int(strays), seed, verts, add_face)
+
         if not faces:
             return None
 
@@ -2266,9 +2296,81 @@ class HairCardService():
         uv_layer = mesh.uv_layers.new(name=CARDS_UV_MAP)
         uv_layer.data.foreach_set('uv', np.array(loop_uvs, dtype=np.float32).ravel())
         mesh.polygons.foreach_set('use_smooth', np.ones(len(mesh.polygons), dtype=bool))
+        values = np.zeros(len(verts), dtype=np.float32)
+        values[:len(hairline)] = hairline
+        mesh.attributes.new(HAIRLINE_ATTRIBUTE, 'FLOAT', 'POINT').data.foreach_set('value', values)
         mesh.update()
 
         return mesh
+
+    @staticmethod
+    def _add_strays(clustered: dict[str, Any], clumps: list, unlaid: list, target: "np.ndarray", count: int, seed: int,
+                    verts: list, add_face: Any) -> None:
+        """Append ``count`` stray strands to ``verts`` / ``add_face`` (see ``build_clump_mesh``).
+
+        Each is a strand of ``clustered`` (picked by ``seed`` among those at least half as long as the longest)
+        resampled to ``target``, shifted point by point as far as its nearest clump (by root, in ``unlaid``) moved
+        when laid on the scalp, and drifted off sideways by up to ``_STRAY_DRIFT`` of its length at the tip. The tube has
+        three sides of ``_STRAY_RADIUS`` at the root, narrowing to a point; UVs as on the clumps (V 0 at the root).
+        """
+        import numpy as np
+
+        positions = clustered["positions"]
+        first_index = clustered["first_index"]
+        point_count = clustered["point_count"]
+        lengths = np.array([np.linalg.norm(np.diff(positions[first:first + n], axis=0), axis=1).sum() if n > 1 else 0.0
+                            for first, n in zip(first_index, point_count)])
+        if lengths.size == 0 or lengths.max() <= 0.0:
+            return
+        candidates = np.nonzero(lengths >= 0.5 * lengths.max())[0]
+        rng = np.random.default_rng(seed + 7919)
+        picked = rng.choice(candidates, size=min(count, len(candidates)), replace=False)
+        clump_roots = np.array([curve[0] for curve in unlaid])
+        sides = 3
+        for strand in picked:
+            first, n = int(first_index[strand]), int(point_count[strand])
+            points = positions[first:first + n]
+            steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+            along = np.concatenate(([0.0], np.cumsum(steps))) / max(steps.sum(), 1e-9)
+            curve = np.stack([np.interp(target, along, points[:, axis]) for axis in range(3)], axis=1)
+            nearest = int(np.argmin(np.linalg.norm(clump_roots - curve[0], axis=1)))
+            curve = curve + (clumps[nearest][0] - unlaid[nearest])
+            tangents = np.gradient(curve, axis=0)
+            norms = np.linalg.norm(tangents, axis=1)
+            if norms.min() <= 1e-9:
+                continue
+            tangents /= norms[:, None]
+            helper = np.array((0.0, 0.0, 1.0)) if abs(tangents[0][2]) < 0.9 else np.array((1.0, 0.0, 0.0))
+            side_axis = np.cross(tangents[0], helper)
+            side_axis /= np.linalg.norm(side_axis)
+            angle = rng.uniform(0.0, 2.0 * math.pi)
+            drift_axis = math.cos(angle) * side_axis + math.sin(angle) * np.cross(tangents[0], side_axis)
+            curve = curve + np.outer(target ** 2, drift_axis) * (_STRAY_DRIFT * lengths[strand])
+
+            rings = len(curve) - 1
+            ring_starts = []
+            normal_axis = side_axis
+            for ring in range(rings):
+                tangent = tangents[ring]
+                normal_axis = normal_axis - np.dot(normal_axis, tangent) * tangent
+                normal_axis /= np.linalg.norm(normal_axis)
+                binormal = np.cross(tangent, normal_axis)
+                radius = _STRAY_RADIUS * (1.0 - target[ring])
+                ring_starts.append(len(verts))
+                for side in range(sides):
+                    turn = 2.0 * math.pi * side / sides
+                    verts.append(tuple(curve[ring] + radius * (math.cos(turn) * normal_axis + math.sin(turn) * binormal)))
+            apex = len(verts)
+            verts.append(tuple(curve[-1]))
+            for ring in range(rings):
+                for side in range(sides):
+                    u0, u1 = side / sides, (side + 1) / sides
+                    a, b = ring_starts[ring] + side, ring_starts[ring] + (side + 1) % sides
+                    if ring + 1 < rings:
+                        c, d = ring_starts[ring + 1] + (side + 1) % sides, ring_starts[ring + 1] + side
+                        add_face(((a, u0, target[ring]), (b, u1, target[ring]), (c, u1, target[ring + 1]), (d, u0, target[ring + 1])))
+                    else:
+                        add_face(((a, u0, target[ring]), (b, u1, target[ring]), (apex, 0.5 * (u0 + u1), 1.0)))
 
     @staticmethod
     @contextmanager

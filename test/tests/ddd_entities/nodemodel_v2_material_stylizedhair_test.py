@@ -11,8 +11,9 @@ def _source(node, identifier):
 
 
 def test_stylized_hair_shader():
-    """Spec section 6 / ticket 67: matte (no anisotropic sheen), root-to-tip gradient (root 15% darker) with painted
-    strand grooves and a painted highlight band in the albedo, no alpha."""
+    """Spec section 6 / tickets 67, 71: matte (no anisotropic sheen), root-to-tip gradient (root 25% darker) with painted
+    strand grooves and a painted highlight band in the albedo, a root shade and cel-cut crevice occlusion over it, and
+    alpha only from the cap's hairline attribute (absent: 0, so fully opaque)."""
     node_tree = NodeService.create_node_tree(ObjectService.random_name())
     NodeWrapperStylizedHair.create_instance(node_tree)
     assert NodeWrapperStylizedHair.validate_tree_against_original_def(fail_hard=True, node_tree=node_tree)
@@ -22,14 +23,16 @@ def test_stylized_hair_shader():
     assert principled.inputs["Roughness"].default_value >= 0.8
     assert principled.inputs["Anisotropic"].default_value == approx(0.0)
     assert not principled.inputs["Tangent"].is_linked
-    assert not principled.inputs["Alpha"].is_linked
-    assert principled.inputs["Alpha"].default_value == approx(1.0)
+    assert _source(principled, "Alpha") == "Hairline alpha"
+    assert nodes["Hairline"].attribute_name == "mpfb_hairline"
+    assert nodes["Hairline alpha"].operation == "SUBTRACT"
+    assert nodes["Hairline alpha"].inputs[0].default_value == approx(1.0)
     assert principled.outputs["BSDF"].links[0].to_node.name == "Material Output"
 
     root = nodes["HairRoot"].outputs["Color"].default_value
     tip = nodes["HairTip"].outputs["Color"].default_value
     for channel in range(3):
-        assert root[channel] == approx(tip[channel] * 0.85)
+        assert root[channel] == approx(tip[channel] * 0.75)
 
     # The gradient runs along V of the cards UV map, from HairRoot (V=0) to HairTip (V=1)
     mix_inputs = {socket.identifier: socket for socket in nodes["Root to tip"].inputs}
@@ -38,7 +41,14 @@ def test_stylized_hair_shader():
     assert mix_inputs["B_Color"].links[0].from_node.name == "HairTip"
 
     # Albedo: gradient times the groove shade, then the highlight band mixed over it
-    assert principled.inputs["Base Color"].links[0].from_node.name == "Highlight"
+    assert principled.inputs["Base Color"].links[0].from_node.name == "Shaded"
+    assert nodes["Shaded"].blend_type == "MULTIPLY"
+    assert _source(nodes["Shaded"], "A_Color") == "Highlight"
+    assert _source(nodes["Shaded"], "B_Color") == "Contact shade"
+    assert _source(nodes["Contact shade"], "Value") == "Root shade"
+    assert _source(nodes["Contact shade"], "Value_001") == "Crevice cut"
+    assert _source(nodes["Crevice cut"], "Value") == "Crevice AO"
+    assert nodes["Root shade"].inputs[0].links[0].from_socket.name == "Y"
     assert _source(nodes["Highlight"], "A_Color") == "Grooved"
     assert _source(nodes["Highlight"], "B_Color") == "Highlight lift"
     assert _source(nodes["Highlight lift"], "A_Color") == "Highlight colour"

@@ -5,7 +5,7 @@ A matte Principled BSDF whose look is painted into the albedo, not made by a spe
 
 - a root-to-tip colour gradient from HairRoot to HairTip, driven by the V coordinate of the
   cards UV map (V runs along the strand, 0 at the root, see HairCardService). By default the
-  root is 15% darker than the tip.
+  root is 25% darker than the tip.
 - painted strand grooves: dark lines along the strand, STRAND_GROOVES of them across U (around
   a CLUMP tube, across a ribbon). U only enters through a cosine with a whole number of periods,
   so the lines meet at the tube seam (U 0 = U 1). Their phase wobbles with a noise on the object
@@ -14,8 +14,16 @@ A matte Principled BSDF whose look is painted into the albedo, not made by a spe
   broken up by the grooves: the gradient colour brightened by HIGHLIGHT_VALUE and lifted toward
   white, mixed into the albedo, so it is lit like the rest of the hair and does not shine
   or move with the view.
+- contact and depth cues (ticket 71), multiplied over all of the above:
+  - root shade: the first ROOT_SHADE_LENGTH of V darkens to ROOT_SHADE at the root, so locks read as growing out
+    of the scalp, and the hair cap (all V 0) sits in that shade under the clumps.
+  - cel crevice darkening: an Ambient Occlusion node (CREVICE_DISTANCE, works in Cycles and EEVEE) cut at
+    CREVICE_THRESHOLD by a narrow smoothstep, so the gaps between locks and where hair meets the head go flat dark
+    (CREVICE_SHADE) instead of a soft gradient.
 - roughness 0.85, specular IOR level 0.2 and no anisotropy: the surface itself is matte.
-- no alpha: the Alpha socket stays at 1.0 and is never linked.
+- alpha only on the soft hairline: the hair cap writes HAIRLINE_ATTRIBUTE (0 inside, 1 on its outer border, see
+  HairCardService), and alpha is 1 minus it, so the cap's dark rim fades over the skin as a contact shadow. Meshes
+  without the attribute read 0 there and stay fully opaque; clump tubes and strays are always opaque.
 """
 
 import math
@@ -29,8 +37,8 @@ _LOG = LogService.get_logger("material.stylizedhair")
 # repeated here since the entities layer does not import the hair card service.
 HAIR_UV_MAP = "UVMap"
 
-# The root is this much of the tip colour (15% darker)
-ROOT_DARKENING = 0.85
+# The root is this much of the tip colour (25% darker)
+ROOT_DARKENING = 0.75
 
 DEFAULT_HAIR_TIP = [0.30, 0.17, 0.09, 1.0]
 DEFAULT_HAIR_ROOT = [DEFAULT_HAIR_TIP[0] * ROOT_DARKENING, DEFAULT_HAIR_TIP[1] * ROOT_DARKENING, DEFAULT_HAIR_TIP[2] * ROOT_DARKENING, 1.0]
@@ -57,6 +65,19 @@ HIGHLIGHT_JITTER = 0.08
 HIGHLIGHT_VALUE = 2.4
 HIGHLIGHT_LIFT = 0.06
 HIGHLIGHT_STRENGTH = 0.7
+
+# Root shade: how far along V it reaches and how dark the very root is (multiplier)
+ROOT_SHADE_LENGTH = 0.2
+ROOT_SHADE = 0.45
+# Cel crevice darkening: occlusion ray length (metres), the AO value at the cut, half the width of the cut, and the
+# multiplier in the crevices
+CREVICE_DISTANCE = 0.02
+CREVICE_THRESHOLD = 0.55
+CREVICE_SOFTNESS = 0.08
+CREVICE_SHADE = 0.4
+
+# Point attribute the hair cap carries: 1 at its outer border, 0 from HAIRLINE_WIDTH inside (HairCardService writes it)
+HAIRLINE_ATTRIBUTE = "mpfb_hairline"
 
 
 def _node_def(node_class, name, location):
@@ -107,7 +128,17 @@ _ORIGINAL_TREE_DEF = {
         _link("Grooved", "Result_Color", "Highlight", "A_Color"),
         _link("Highlight colour", "Color", "Highlight lift", "A_Color"),
         _link("Highlight lift", "Result_Color", "Highlight", "B_Color"),
-        _link("Highlight", "Result_Color", "Principled BSDF", "Base Color"),
+        # Contact and depth: root shade times the cel cut of the ambient occlusion, multiplied over the albedo
+        _link("Separate UV", "Y", "Root shade", "Value"),
+        _link("Crevice AO", "AO", "Crevice cut", "Value"),
+        _link("Root shade", "Result", "Contact shade", "Value"),
+        _link("Crevice cut", "Result", "Contact shade", "Value_001"),
+        _link("Highlight", "Result_Color", "Shaded", "A_Color"),
+        _link("Contact shade", "Value", "Shaded", "B_Color"),
+        _link("Shaded", "Result_Color", "Principled BSDF", "Base Color"),
+        # Soft hairline: the cap fades out over its border
+        _link("Hairline", "Fac", "Hairline alpha", "Value_001"),
+        _link("Hairline alpha", "Value", "Principled BSDF", "Alpha"),
         _link("Principled BSDF", "BSDF", "Material Output", "Surface")
         ],
     "nodes": [
@@ -134,8 +165,15 @@ _ORIGINAL_TREE_DEF = {
         _node_def("ShaderNodeHueSaturation", "Highlight colour", [-450.0, 650.0]),
         _node_def("ShaderNodeMix", "Highlight lift", [-250.0, 650.0]),
         _node_def("ShaderNodeMix", "Highlight", [150.0, 350.0]),
-        _node_def("ShaderNodeBsdfPrincipled", "Principled BSDF", [400.0, 300.0]),
-        _node_def("ShaderNodeOutputMaterial", "Material Output", [750.0, 300.0])
+        _node_def("ShaderNodeMapRange", "Root shade", [-700.0, -500.0]),
+        _node_def("ShaderNodeAmbientOcclusion", "Crevice AO", [-900.0, -750.0]),
+        _node_def("ShaderNodeMapRange", "Crevice cut", [-700.0, -750.0]),
+        _node_def("ShaderNodeMath", "Contact shade", [-450.0, -600.0]),
+        _node_def("ShaderNodeMix", "Shaded", [350.0, 350.0]),
+        _node_def("ShaderNodeAttribute", "Hairline", [150.0, -100.0]),
+        _node_def("ShaderNodeMath", "Hairline alpha", [350.0, -100.0]),
+        _node_def("ShaderNodeBsdfPrincipled", "Principled BSDF", [600.0, 300.0]),
+        _node_def("ShaderNodeOutputMaterial", "Material Output", [950.0, 300.0])
         ]
     }
 
@@ -204,11 +242,22 @@ class _NodeWrapperStylizedHair(AbstractMaterialWrapper):
              attribute_values={"data_type": "RGBA"})
         node("ShaderNodeMix", "Highlight", attribute_values={"data_type": "RGBA", "clamp_factor": True})
 
+        node("ShaderNodeMapRange", "Root shade", input_socket_values={"From Min": 0.0, "From Max": ROOT_SHADE_LENGTH, "To Min": ROOT_SHADE, "To Max": 1.0},
+             attribute_values={"data_type": "FLOAT", "interpolation_type": "SMOOTHSTEP", "clamp": True})
+        node("ShaderNodeAmbientOcclusion", "Crevice AO", input_socket_values={"Distance": CREVICE_DISTANCE}, attribute_values={"samples": 16})
+        node("ShaderNodeMapRange", "Crevice cut", input_socket_values={
+            "From Min": CREVICE_THRESHOLD - CREVICE_SOFTNESS, "From Max": CREVICE_THRESHOLD + CREVICE_SOFTNESS,
+            "To Min": CREVICE_SHADE, "To Max": 1.0},
+             attribute_values={"data_type": "FLOAT", "interpolation_type": "SMOOTHSTEP", "clamp": True})
+        math_node("Contact shade", "MULTIPLY")
+        node("ShaderNodeMix", "Shaded", input_socket_values={"Factor_Float": 1.0}, attribute_values={"data_type": "RGBA", "blend_type": "MULTIPLY"})
+        node("ShaderNodeAttribute", "Hairline", attribute_values={"attribute_type": "GEOMETRY", "attribute_name": HAIRLINE_ATTRIBUTE})
+        math_node("Hairline alpha", "SUBTRACT", 1.0, None)
+
         node("ShaderNodeBsdfPrincipled", "Principled BSDF", input_socket_values={
             "Roughness": ROUGHNESS,
             "Specular IOR Level": SPECULAR,
             "Anisotropic": 0.0,
-            "Alpha": 1.0
             })
 
         for tree_link in _ORIGINAL_TREE_DEF["links"]:
