@@ -99,9 +99,6 @@ def _general_set_target_value(name, value):
     prune = MODEL_PROPERTIES.get_value("prune", entity_reference=bpy.context.scene)
     ObjectService.activate_blender_object(basemesh)
     TargetService.reapply_macro_details(basemesh, remove_zero_weight_targets=prune)
-    if name == "age":
-        # Stylization fades with age (STYLIZED_SPEC.md 4.3)
-        HumanService.apply_stylization_age_fade(basemesh, delete_target_on_zero=prune)
 
     # If 'refit' is enabled, perform a refit operation on the basemesh
     if MODEL_PROPERTIES.get_value("refit", entity_reference=bpy.context.scene):

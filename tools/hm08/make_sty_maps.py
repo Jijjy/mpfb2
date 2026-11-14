@@ -5,12 +5,12 @@
 out_dir defaults to src/mpfb/data/textures. Writes three 1024² grayscale PNGs:
 
 - sty_bloodmap.png: the warm areas. Cheeks, nose tip, knuckles, elbows, knees, palms and soles are
-  painted per vertex on the stylized default adult (falloffs around landmarks taken from the joint
+  painted per vertex on the default adult (falloffs around landmarks taken from the joint
   vertex groups, palm/sole sides from the normals) and baked to UV with Cycles. Ears are a falloff
   around the centre of HM08's ear mask (mpfb_ears.jpg marks only the inner ear); lips and inner ears
   also come straight from HM08's region masks (mpfb_lips.jpg, mpfb_ears.jpg), already in these UVs.
 - sty_cavity.png: ambient occlusion baked from the HM08 base mesh with MPFB's default macros and
-  stylized-default at 1.0. White is open skin; the occlusion distance is short so it reads folds
+  no shape target. White is open skin; the occlusion distance is short so it reads folds
   and creases, not the large-scale shadowing a light already gives.
 - sty_roughness.png: the roughness mask the wrapper maps 0..1 to 0.4..0.6: body 0.75 (0.55),
   face 0.5 (0.50), lips 0.0 (0.40), from mpfb_face.jpg and mpfb_lips.jpg.
@@ -24,7 +24,7 @@ import bpy
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import make_stylized_default as msd  # noqa: E402
+import hm08mesh as msd  # noqa: E402
 
 SIZE = 1024
 AO_SAMPLES = 256
@@ -235,7 +235,6 @@ def main():
     groups = msd.load_groups()
     weights = msd.load_weights(len(raw))
     p = msd.default_adult(raw)
-    msd.apply_target(p, "stylization/stylized-default", 1.0)
     body = set(groups["body"].tolist())
     body_faces = [i for i, f in enumerate(faces) if all(v in body for v in f)]
 

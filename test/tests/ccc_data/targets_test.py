@@ -1,5 +1,5 @@
-"""The bundled targets: target.json and the files under data/targets agree, and the stylization target fits HM08."""
-import gzip, json, os, re
+"""The bundled targets: target.json and the files under data/targets agree."""
+import json, os, re
 from .. import LocationService
 
 # Directories under data/targets that target.json does not list on purpose: the macro targets are driven by
@@ -63,31 +63,3 @@ def test_every_target_file_has_a_target_json_entry():
                 orphans.append((section_name, name))
     assert not orphans, "target files without a target.json entry: " + str(sorted(orphans)[:10])
 
-
-def test_stylization_section_is_one_sided():
-    """The stylization section has one category, stylized-default, with no opposites (slider range 0 to 2: stylized-default, then stylized-chunky)"""
-    categories = _sections()["stylization"]["categories"]
-    assert len(categories) == 1
-    category = categories[0]
-    assert category["name"] == "stylized-default"
-    assert category["targets"] == ["stylized-default", "stylized-chunky"]
-    assert not category["has_left_and_right"]
-    assert "opposites" not in category
-
-
-def test_stylized_default_indices_fit_hm08():
-    """Every vertex index in stylized-default and stylized-chunky is below HM08's vertex count (19,158: helpers included)"""
-    with open(os.path.join(LocationService.get_mpfb_data("3dobjs"), "base.obj"), "r") as obj_file:
-        vertex_count = sum(1 for line in obj_file if line.startswith("v "))
-    assert vertex_count == 19158
-    for name in ("stylized-default", "stylized-chunky"):
-        path = os.path.join(_targets_dir(), "stylization", name + ".target.gz")
-        indices = []
-        with gzip.open(path, "rt") as target_file:
-            for line in target_file:
-                if line[:1].isdigit():
-                    indices.append(int(line.split()[0]))
-        assert indices, name + " has no vertex lines"
-        assert min(indices) >= 0, name
-        assert max(indices) < vertex_count, name
-        assert len(indices) == len(set(indices)), name + ": a vertex is listed twice"

@@ -40,7 +40,7 @@ def test_loader_fills_defaults_and_rejects_bad_values(out_dir):
     assert char["eyebrows"] == make_demo.DEFAULTS["eyebrows"]
     assert char["rig"] == "default" and char["hair"] is None
     for bad in ({"colour": 1}, {"skin_tone": "Green"}, {"macros": {"wings": 1}}, {"eyes": {"Glow": 1}},
-                {"stylization": 3}, {"rig": None, "pose": "t-pose"}):
+                {"rig": None, "pose": "t-pose"}):
         with pytest.raises(ValueError):
             make_demo.load_character(_write(out_dir, "bad", bad))
     with pytest.raises(ValueError):
@@ -57,7 +57,6 @@ def test_builds_and_saves_one_character(out_dir):
     char = make_demo.load_character(source)
     basemesh = make_demo.build_character(char)
     assert HumanService.has_stylized_skin(basemesh)
-    assert HumanService.get_stylization(basemesh) == approx(1.0)
     skin = make_demo._group_node(MaterialService.get_material(basemesh))
     assert list(skin.inputs["SkinTone"].default_value) == approx(swatches["Tan"])
     children = {child.name: child for child in basemesh.parent.children}

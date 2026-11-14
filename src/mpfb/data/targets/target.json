@@ -3901,22 +3901,6 @@
         "label": "stomach",
         "unsorted": []
     },
-    "stylization": {
-        "categories": [
-            {
-                "has_left_and_right": false,
-                "label": "stylized-default",
-                "name": "stylized-default",
-                "targets": [
-                    "stylized-default",
-                    "stylized-chunky"
-                ]
-            }
-        ],
-        "include_per_default": true,
-        "label": "stylization",
-        "unsorted": []
-    },
     "torso": {
         "categories": [
             {

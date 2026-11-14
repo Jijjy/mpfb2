@@ -271,142 +271,49 @@ def _mixed_coordinates(basemesh):
     return mixed.reshape(-1, 3)
 
 
-def _head_to_height(basemesh):
-    """Crown to chin over crown to sole, measured on the body as tools/hm08/make_stylized_default.py measure() does"""
-    import numpy, re
-    limb = re.compile(r"^(spine|neck|clavicle|shoulder|upperarm|lowerarm|wrist|metacarpal|finger|"
-                      r"pelvis|upperleg|lowerleg|foot|toe|breast|root)")
-    scale = basemesh.MPFB_GEN_scale_factor
-    blender = _mixed_coordinates(basemesh) / scale
-    # Back to the obj frame in decimeters: x across, y up, z forward
-    p = numpy.stack([blender[:, 0], blender[:, 2], -blender[:, 1]], axis=1)
-    groups_file = os.path.join(LocationService.get_mpfb_data("mesh_metadata"), "basemesh_vertex_groups.json")
-    with open(groups_file, "r") as json_file:
-        groups = {k: numpy.concatenate([numpy.arange(a, b + 1) for a, b in v]) for k, v in json.load(json_file).items()}
-    weights_file = os.path.join(LocationService.get_mpfb_data("rigs"), "standard", "weights.default.json")
-    with open(weights_file, "r") as json_file:
-        raw = json.load(json_file)["weights"]
-    w_face = numpy.zeros(len(p))
-    for bone, pairs in raw.items():
-        if not limb.match(bone):
-            for index, value in pairs:
-                w_face[index] += value
-    w_face = numpy.clip(w_face, 0.0, 1.0)
-    body = groups["body"]
-    b = p[body]
-    crown, sole = b[:, 1].max(), b[:, 1].min()
-    neck_z = p[groups["joint-neck"]].mean(0)[2]
-    chin_set = (numpy.abs(b[:, 0]) < 0.05) & (w_face[body] > 0.5) & (b[:, 2] > neck_z + 0.6)
-    chin = b[chin_set, 1].min()
-    return (crown - chin) / (crown - sole)
+def test_create_human_default_is_the_stock_mesh():
+    """HumanService.create_human() -- a new human at defaults has the stock add-on's vertex positions (1e-6): base.obj plus the default macro targets, nothing else"""
+    import gzip, numpy
+    data = LocationService.get_mpfb_data()
+    with open(os.path.join(data, "3dobjs", "base.obj"), "r") as obj_file:
+        p = numpy.array([[float(x) for x in line.split()[1:4]] for line in obj_file if line.startswith("v ")])
+    for name, weight in TargetService.calculate_target_stack_from_macro_info_dict(TargetService.get_default_macro_info_dict()):
+        with gzip.open(os.path.join(data, "targets", name + ".target.gz"), "rt") as target_file:
+            for line in target_file:
+                if line[:1].isdigit():
+                    i, x, y, z = line.split()
+                    p[int(i)] += weight * numpy.array([float(x), float(y), float(z)])
+    scale = 0.1
+    expected = numpy.stack([p[:, 0], -p[:, 2], p[:, 1]], axis=1) * scale
 
-
-def test_create_human_stylization_default():
-    """HumanService.create_human() -- a new human gets stylized-default at 1.0, 0.135-0.15 of its height a head"""
-    basemesh = HumanService.create_human()
-    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
-    ratio = _head_to_height(basemesh)
-    assert 0.135 <= ratio <= 0.15, "head/height " + str(ratio)
+    basemesh = HumanService.create_human(scale=scale)
+    actual = _mixed_coordinates(basemesh)
     ObjectService.delete_object(basemesh)
 
-
-def test_create_human_stylization_zero_is_plain():
-    """HumanService.create_human() -- stylization 0 gives the plain add-on's vertex positions (1e-6)"""
-    import numpy
-    plain = HumanService.create_human(stylization=0.0)
-    assert not TargetService.has_target(plain, "stylized-default")
-    plain_co = _mixed_coordinates(plain)
-    ObjectService.delete_object(plain)
-
-    # A stylized human with its stylization turned back off is the plain human, but for where
-    # feet_on_ground put it: create_human found the lowest point with the target on, so only a
-    # vertical offset may remain.
-    stylized = HumanService.create_human()
-    TargetService.set_target_value(stylized, "stylized-default", 0.0)
-    stylized_co = _mixed_coordinates(stylized)
-    ObjectService.delete_object(stylized)
-
-    difference = stylized_co - plain_co
+    assert actual.shape == expected.shape
+    difference = actual - expected
     assert numpy.abs(difference[:, 0:2]).max() < 1e-6
+    # feet_on_ground lifts the whole mesh by one offset
     vertical = difference[:, 2]
     assert vertical.max() - vertical.min() < 1e-6
 
 
-def test_stylization_fades_with_age():
-    """HumanService -- stylized-default weight is slider x age factor: 1 young, 0.5 child, 0 baby, recomputed on age change"""
-    HumanObjectProperties = dynamic_import("mpfb.entities.objectproperties", "HumanObjectProperties")
-    expected = {0.5: 1.0, 0.1875: 0.5, 0.0: 0.0}
-    for age, weight in expected.items():
-        macro = TargetService.get_default_macro_info_dict()
-        macro["age"] = age
-        basemesh = HumanService.create_human(macro_detail_dict=macro)
-        assert HumanService.get_stylization(basemesh) == approx(1.0)
-        assert TargetService.get_target_value(basemesh, "stylized-default") == approx(weight), "age " + str(age)
-        ObjectService.delete_object(basemesh)
-
-    # Age changes on an existing human: baby -> child -> young -> baby, the slider stays at 0.8
-    macro = TargetService.get_default_macro_info_dict()
-    macro["age"] = 0.0
-    basemesh = HumanService.create_human(macro_detail_dict=macro, stylization=0.8)
-    assert not TargetService.has_target(basemesh, "stylized-default")
-    for age, weight in [(0.1875, 0.4), (0.5, 0.8), (0.0, 0.0)]:
-        HumanObjectProperties.set_value("age", age, entity_reference=basemesh)
-        HumanService.apply_stylization_age_fade(basemesh)
-        assert TargetService.get_target_value(basemesh, "stylized-default") == approx(weight), "age " + str(age)
-    assert HumanService.get_stylization(basemesh) == approx(0.8)
-
-    # A saved baby keeps its slider, and loads faded again
-    human_info = json.loads(HumanService.serialize_to_json_string(basemesh))
-    assert {"target": "stylized-default", "value": approx(0.8)} in human_info["targets"]
-    ObjectService.delete_object(basemesh)
-    human_info["phenotype"]["age"] = 0.1875
-    deser = HumanService.get_default_deserialization_settings()
-    deser["load_clothes"] = False
-    loaded = HumanService.deserialize_from_dict(human_info, deser)
-    assert HumanService.get_stylization(loaded) == approx(0.8)
-    assert TargetService.get_target_value(loaded, "stylized-default") == approx(0.4)
-    ObjectService.delete_object(loaded)
-
-
-def test_stylization_chunky_endpoint():
-    """HumanService -- slider 2.0 is stylized-default 1 plus stylized-chunky 1, about 6 heads; saved and loaded as the slider"""
-    basemesh = HumanService.create_human(stylization=2.0)
-    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
-    assert TargetService.get_target_value(basemesh, "stylized-chunky") == approx(1.0)
-    ratio = _head_to_height(basemesh)
-    assert 0.155 <= ratio <= 0.175, "head/height " + str(ratio)
-    HumanService.set_stylization(basemesh, 1.5)
-    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(1.0)
-    assert TargetService.get_target_value(basemesh, "stylized-chunky") == approx(0.5)
-    human_info = json.loads(HumanService.serialize_to_json_string(basemesh))
-    assert {"target": "stylized-default", "value": approx(1.5)} in human_info["targets"]
-    assert not [entry for entry in human_info["targets"] if entry["target"] == "stylized-chunky"]
-    HumanService.set_stylization(basemesh, 0.5)
-    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(0.5)
-    assert not TargetService.has_target(basemesh, "stylized-chunky")
-    ObjectService.delete_object(basemesh)
-    human_info["phenotype"]["age"] = 0.1875
-    deser = HumanService.get_default_deserialization_settings()
-    deser["load_clothes"] = False
-    loaded = HumanService.deserialize_from_dict(human_info, deser)
-    assert HumanService.get_stylization(loaded) == approx(1.5)
-    assert TargetService.get_target_value(loaded, "stylized-default") == approx(0.5)
-    assert TargetService.get_target_value(loaded, "stylized-chunky") == approx(0.25)
-    ObjectService.delete_object(loaded)
-
-
-def test_deserialize_from_mhm_without_stylization_loads_at_zero():
-    """HumanService.deserialize_from_mhm() -- an .mhm without the stylization key is not stylized"""
+def test_deserialize_from_mhm_ignores_stylization_entries(tmp_path):
+    """HumanService.deserialize_from_mhm() -- an .mhm saved with the removed stylization targets loads without them"""
     deser = HumanService.get_default_deserialization_settings()
     deser["clothes_deep_search"] = False
     deser["bodypart_deep_search"] = False
     deser["load_clothes"] = False
-    mhm_file = os.path.join(LocationService.get_mpfb_test("testdata"), "testchar.mhm")
-    with open(mhm_file, "r") as mhm:
-        assert "stylized-default" not in mhm.read()
+    with open(os.path.join(LocationService.get_mpfb_test("testdata"), "testchar.mhm"), "r") as mhm:
+        content = mhm.read()
+    mhm_file = str(tmp_path / "stylized.mhm")
+    with open(mhm_file, "w") as mhm:
+        mhm.write(content.rstrip("\n") + "\nmodifier stylization/stylized-default 1.000000\n"
+                  "modifier stylization/stylized-chunky 0.500000\n")
     basemesh = HumanService.deserialize_from_mhm(mhm_file, deser)
-    assert TargetService.get_target_value(basemesh, "stylized-default") == approx(0.0)
-    assert not TargetService.has_target(basemesh, "stylized-default")
+    names = [key.name for key in basemesh.data.shape_keys.key_blocks]
+    assert not [name for name in names if "stylized" in name]
+    assert TargetService.get_target_value(basemesh, "head-square") == approx(0.422)
     ObjectService.delete_object(basemesh)
 
 
@@ -725,8 +632,8 @@ def test_add_mhclo_asset_stylizes_lashes_on_stylized_skin():
             ObjectService.delete_object(obj)
 
 
-def test_make_stylized_sets_shape_skin_eyes_and_recolours():
-    """HumanService.make_stylized() -- new-human defaults are stylized; the operator sets stylization, skin and eyes together"""
+def test_make_stylized_sets_skin_eyes_and_recolours():
+    """HumanService.make_stylized() -- new-human defaults are stylized; the operator sets skin and eyes together and leaves the shape"""
     NEW_HUMAN_SKIN_TYPE = dynamic_import("mpfb.services.humanservice", "NEW_HUMAN_SKIN_TYPE")
     NEW_HUMAN_EYES_MATERIAL_TYPE = dynamic_import("mpfb.services.humanservice", "NEW_HUMAN_EYES_MATERIAL_TYPE")
     assert NEW_HUMAN_SKIN_TYPE == "STYLIZED"
@@ -747,7 +654,7 @@ def test_make_stylized_sets_shape_skin_eyes_and_recolours():
               ("Eyelashes", "eyelashes01/eyelashes01.mhclo")]}
     if None in stock.values():
         pytest.skip("the stock eyes, teeth, tongue and eyebrows are not installed")
-    basemesh = HumanService.create_human(stylization=0.0)
+    basemesh = HumanService.create_human()
     HumanService.set_character_skin(None, basemesh, skin_type="LAYERED")
     added = {name: HumanService.add_mhclo_asset(path, basemesh, asset_type=name, set_up_rigging=False, interpolate_weights=False,
                                                 import_subrig=False, import_weights=False)
@@ -760,8 +667,7 @@ def test_make_stylized_sets_shape_skin_eyes_and_recolours():
     eye_vertex_before = eyes.data.vertices[0].co.copy()
     try:
         HumanService.make_stylized(basemesh)
-        assert HumanService.get_stylization(basemesh) == approx(1.0)
-        assert (eyes.data.vertices[0].co - eye_vertex_before).length > 1e-4, "the eyes were refitted to the stylized shape"
+        assert (eyes.data.vertices[0].co - eye_vertex_before).length < 1e-9, "the shape and the eye fit are untouched"
         assert MaterialService.identify_material(MaterialService.get_material(basemesh)) == "stylized_skin"
         assert MaterialService.identify_material(MaterialService.get_material(eyes)) == "stylized_eyes"
         presets = HumanService.get_stylized_bodypart_presets()

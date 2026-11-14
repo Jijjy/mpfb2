@@ -22,7 +22,7 @@ group's map inputs:
 - Makeup: an optional sRGB decal mixed over the albedo by its alpha.
 
 The textures come from data/textures/sty_*.png, 1024² and laid out in HM08's UVs. tools/hm08/make_sty_maps.py
-makes the BloodMap, CavityMap and roughness mask from the HM08 base mesh with stylized-default at 1.0;
+makes the BloodMap, CavityMap and roughness mask from the HM08 base mesh with MPFB's default macros;
 sty_makeup_none.png is an empty (transparent) decal. HM08's mpfb_* region textures are not read.
 """
 

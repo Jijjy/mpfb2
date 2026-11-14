@@ -16,7 +16,6 @@ A character file holds these keys; all but "name" are optional and default to DE
     name        the output file name; defaults to the JSON file's stem
     macros      macro values over the default phenotype (gender, age, muscle, weight, height,
                 proportions, cupsize, firmness, race: {african, asian, caucasian})
-    stylization the Stylization slider, 0 to 2
     skin_tone   a swatch name from data/settings/skin_tones.json
     eyes        stylized eye settings over data/settings/eye_settings.stylized.json
     eyebrows, eyelashes, teeth, tongue, hair, shoes
@@ -50,7 +49,6 @@ CHARACTERS_DIR = os.path.join(HERE, "characters")
 
 DEFAULTS = {
     "macros": {},
-    "stylization": 1.0,
     "skin_tone": "Default",
     "eyes": {},
     "eyebrows": "eyebrow001",
@@ -124,8 +122,6 @@ def load_character(path):
     bad = set(char["macros"].get("race", {})) - set(RACE_KEYS)
     if bad:
         raise ValueError(f"{path}: unknown races {sorted(bad)}")
-    if not 0.0 <= float(char["stylization"]) <= 2.0:
-        raise ValueError(f"{path}: stylization {char['stylization']} is outside 0 to 2")
     swatches = [s["name"] for s in _settings("skin_tones.json")["swatches"]]
     if char["skin_tone"] not in swatches:
         raise ValueError(f"{path}: skin_tone {char['skin_tone']!r} is not one of {swatches}")
@@ -233,8 +229,7 @@ def build_character(char):
             macros["race"].update(value)
         else:
             macros[key] = value
-    stylization = float(char["stylization"])
-    basemesh = HumanService.create_human(macro_detail_dict=macros, stylization=stylization)
+    basemesh = HumanService.create_human(macro_detail_dict=macros)
     basemesh.name = char["name"] + ".body"
 
     rig = None
@@ -251,11 +246,8 @@ def build_character(char):
         HumanService.add_mhclo_asset(_asset(name, "clothes"), basemesh, asset_type="Clothes", subdiv_levels=1,
                                      material_type="MAKESKIN")
 
-    # Stylized skin, eyes and bodypart recolours; this sets the slider to 1 when it was below
+    # Stylized skin, eyes and bodypart recolours
     HumanService.make_stylized(basemesh)
-    if abs(HumanService.get_stylization(basemesh) - stylization) > 1e-6:
-        HumanService.set_stylization(basemesh, stylization)
-        HumanService.refit(basemesh)
 
     skin = _group_node(MaterialService.get_material(basemesh))
     tone = dict(_import("entities.nodemodel.v2.materials.nodewrapperstylizedskin", "skin_tone_swatches")())

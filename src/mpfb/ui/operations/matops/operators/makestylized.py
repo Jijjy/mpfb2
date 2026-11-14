@@ -12,7 +12,7 @@ _LOG = LogService.get_logger("matops.makestylized")
 
 @pollstrategy(PollStrategy.ANY_MAKEHUMAN_OBJECT_ACTIVE)
 class MPFB_OT_Make_Stylized_Operator(MpfbOperator):
-    """Set stylization 1.0, the stylized skin and the stylized eyes together, and recolour teeth, tongue, brows and lashes"""
+    """Set the stylized skin and the stylized eyes together, and recolour teeth, tongue, brows and lashes"""
     bl_idname = "mpfb.make_stylized"
     bl_label = "Make stylized"
     bl_options = {'REGISTER', 'UNDO'}

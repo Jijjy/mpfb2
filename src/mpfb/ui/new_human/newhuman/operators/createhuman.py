@@ -133,8 +133,7 @@ class MPFB_OT_CreateHumanOperator(MpfbOperator):
                 extra_vertex_groups=ctx.extra_vertex_groups,
                 feet_on_ground=True,
                 scale=scale,
-                macro_detail_dict=macro_details,
-                stylization=ctx.phenotype_stylization)
+                macro_detail_dict=macro_details)
             self.report({'INFO'}, "Human created. You can adjust the phenotype values on the modeling panel.")
         else:
             basemesh = HumanService.create_human(
@@ -142,14 +141,13 @@ class MPFB_OT_CreateHumanOperator(MpfbOperator):
                 detailed_helpers=ctx.detailed_helpers,
                 extra_vertex_groups=ctx.extra_vertex_groups,
                 feet_on_ground=True,
-                scale=scale,
-                stylization=ctx.phenotype_stylization)
+                scale=scale)
             self.report({'INFO'}, "Human created.")
 
         _LOG.debug("Basemesh", basemesh)
 
         if ctx.stylized_skin:
-            # STYLIZED reads no skin file; shape and skin start out together (STYLIZED_SPEC.md 5.3, R2)
+            # STYLIZED reads no skin file (STYLIZED_SPEC.md 5.3)
             HumanService.set_character_skin(None, basemesh, skin_type=NEW_HUMAN_SKIN_TYPE, material_instances=False)
 
         # Otherwise all targets will be set to 100% when entering edit mode
