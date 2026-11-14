@@ -4,8 +4,23 @@
     "hair": {
         "pack": "demo_curls",
         "blend": "hair/demo_hair.blend",
-        "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 30, "cards_cluster_samples": 64, "cards_clump_max_tris": 25000, "cards_clump_width": 2.5, "cards_clump_tip": 0.5},
-        "color": [0.25, 0.07, 0.02]
+        "cards": {
+            "cards_mode": "CLUMP",
+            "cards_cluster_count": 30,
+            "cards_cluster_samples": 64,
+            "cards_clump_max_tris": 25000,
+            "cards_clump_width": 2.2,
+            "cards_clump_tip": 0.5,
+            "cards_clump_flatten": 0.35,
+            "cards_clump_flow": 0,
+            "cards_clump_hug": 0.1,
+            "cards_clump_cap": 0.003
+        },
+        "color": [
+            0.25,
+            0.07,
+            0.02
+        ]
     },
     "rig": "default",
     "pose": "../poses/relaxed.json"

@@ -3,8 +3,23 @@
     "skin_tone": "Default",
     "hair": {
         "pack": "hedgehog",
-        "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 24, "cards_cluster_samples": 8, "cards_clump_max_tris": 6000, "cards_clump_width": 4.0, "cards_clump_tip": 0.12},
-        "color": [0.03, 0.02, 0.015]
+        "cards": {
+            "cards_mode": "CLUMP",
+            "cards_cluster_count": 60,
+            "cards_cluster_samples": 8,
+            "cards_clump_max_tris": 14000,
+            "cards_clump_width": 2.2,
+            "cards_clump_tip": 0.2,
+            "cards_clump_flatten": 0.2,
+            "cards_clump_flow": 15,
+            "cards_clump_hug": 1.0,
+            "cards_clump_cap": 0.003
+        },
+        "color": [
+            0.03,
+            0.02,
+            0.015
+        ]
     },
     "rig": "default",
     "pose": "../poses/relaxed.json"

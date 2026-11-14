@@ -88,8 +88,17 @@ def build_cards_for_asset(context, basemesh, hair_obj, card_name, is_fur, proper
                 f"{asset_name}_cards_clump_max_tris", 5000, entity_reference=basemesh))
             width = float(properties.get_value(f"{asset_name}_cards_clump_width", 1.0, entity_reference=basemesh))
             tip = float(properties.get_value(f"{asset_name}_cards_clump_tip", 0.25, entity_reference=basemesh))
+            def clump_value(name, default):
+                return properties.get_value(f"{asset_name}_cards_clump_{name}", default, entity_reference=basemesh)
+            cap = float(clump_value("cap", 0.0))
+            hug = float(clump_value("hug", 0.0))
+            # The body is only consulted for the scalp: with neither a cap nor a hug the clumps are as before
+            surface_obj = resolve_body_surface(basemesh) if cap > 0.0 or hug > 0.0 else None
             data = HairCardService.build_clump_mesh(hair_obj, *cluster_settings, samples, max_tris, depsgraph=depsgraph,
-                                                    width=width, tip_radius=tip)
+                                                    width=width, tip_radius=tip,
+                                                    flatten=float(clump_value("flatten", cg.CLUMP_FLATTEN)),
+                                                    flow_passes=int(clump_value("flow", 0)),
+                                                    surface_obj=surface_obj, cap_offset=cap, hug=hug)
         else:
             data = HairCardService.build_cluster_ribbon_mesh(hair_obj, *cluster_settings, samples, depsgraph=depsgraph)
 

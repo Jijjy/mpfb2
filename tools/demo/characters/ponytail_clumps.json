@@ -3,8 +3,23 @@
     "skin_tone": "Default",
     "hair": {
         "pack": "short_ponnytail",
-        "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 20, "cards_cluster_samples": 32, "cards_clump_max_tris": 14000, "cards_clump_width": 3.5, "cards_clump_tip": 0.4},
-        "color": [0.35, 0.18, 0.06]
+        "cards": {
+            "cards_mode": "CLUMP",
+            "cards_cluster_count": 12,
+            "cards_cluster_samples": 32,
+            "cards_clump_max_tris": 14000,
+            "cards_clump_width": 3.5,
+            "cards_clump_tip": 0.8,
+            "cards_clump_flatten": 0.4,
+            "cards_clump_flow": 3,
+            "cards_clump_hug": 0.25,
+            "cards_clump_cap": 0.003
+        },
+        "color": [
+            0.35,
+            0.18,
+            0.06
+        ]
     },
     "rig": "default",
     "pose": "../poses/relaxed.json"

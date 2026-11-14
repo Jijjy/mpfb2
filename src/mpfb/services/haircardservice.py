@@ -131,6 +131,14 @@ CLUMP_TIP_SIDES = 3
 _CLUMP_TIP_RADIUS = 0.25
 
 _CLUMP_MIN_RADIUS = 0.002
+# Flat half-axis of a clump's cross-section as a fraction of the wide one (0.5: the 2:1 tube)
+CLUMP_FLATTEN = 0.5
+# Neighbours whose direction a clump's curve is averaged with in each flow pass
+_CLUMP_FLOW_NEIGHBOURS = 4
+# Hair cap: cuts per body edge, how far past the outermost strand root it reaches (metres) and border smoothing steps
+_CLUMP_CAP_CUTS = 2
+_CLUMP_CAP_REACH = 0.008
+_CLUMP_CAP_BORDER_SMOOTHING = 4
 
 # The UV map that the tiles / ribbon / cluster modes lay out and which the bake packs into the atlas
 CARDS_UV_MAP = "UVMap"
@@ -1550,9 +1558,179 @@ class HairCardService():
         clustered["assignments"] = assignments
 
     @staticmethod
+    def _smooth_clump_flow(clumps: list, passes: int) -> None:
+        """Average each clump curve's segment directions with its nearest neighbours' (by root), ``passes`` times.
+
+        Each pass is half its own direction, half the mean of its ``_CLUMP_FLOW_NEIGHBOURS`` nearest clumps'. Roots and
+        segment lengths are kept; the curve is rebuilt from the root. Rewrites the curve (index 0) of each entry.
+        """
+        import numpy as np
+
+        curves = np.array([clump[0] for clump in clumps])
+        count = len(curves)
+        neighbours = min(_CLUMP_FLOW_NEIGHBOURS, count - 1)
+        if neighbours < 1 or passes < 1:
+            return
+        roots = curves[:, 0]
+        distances = ((roots[:, None, :] - roots[None, :, :]) ** 2).sum(axis=2)
+        nearest = np.argsort(distances, axis=1)[:, 1:neighbours + 1]
+
+        segments = np.diff(curves, axis=1)
+        lengths = np.linalg.norm(segments, axis=2)
+        directions = segments / np.maximum(lengths, 1e-12)[:, :, None]
+        for _pass in range(passes):
+            mixed = 0.5 * directions + 0.5 * directions[nearest].mean(axis=1)
+            norms = np.linalg.norm(mixed, axis=2)
+            # A segment whose neighbours point straight back keeps its own direction
+            directions = np.where((norms > 1e-6)[:, :, None], mixed / np.maximum(norms, 1e-12)[:, :, None], directions)
+        steps = np.cumsum(directions * lengths[:, :, None], axis=1)
+        rebuilt = np.concatenate((roots[:, None, :], roots[:, None, :] + steps), axis=1)
+        for clump, curve in zip(clumps, rebuilt):
+            clump[0] = curve
+
+    @staticmethod
+    def _lay_clumps_on_scalp(clumps: list, surface_obj: bpy.types.Object, hair_obj: bpy.types.Object, roots: "np.ndarray", target: "np.ndarray",
+                             ring_radius: list[float], flatten: float, cap_offset: float, hug: float,
+                             depsgraph: bpy.types.Depsgraph | None) -> "tuple[np.ndarray, list[tuple[int, ...]]] | None":
+        """Keep the clump curves on and outside the scalp, and cut the hair cap.
+
+        For each clump (entries [curve, minor axis, root radius, scalp normal], all in hair local space) the root goes
+        to ``cap_offset`` above the skin (half sunk into the cap) and the curve is rebuilt from it segment by segment,
+        each keeping its length. Over the first stretch (``hug``, a fraction of the curve's parameter, with a smooth
+        falloff) each segment is turned into the scalp's tangent plane (one standing straight out falls downwards) and
+        its end lowered to one half-thickness above the cap; past it the segments keep their direction. No point ends
+        up under that floor: it is pushed out along the surface normal. The scalp normal at the root is stored in
+        the entry. Returns the cap (``_cut_hair_cap``) around the strand ``roots``, or None without a cap.
+        """
+        import numpy as np
+        from mathutils.bvhtree import BVHTree
+
+        to_surface = surface_obj.matrix_world.inverted() @ hair_obj.matrix_world
+        to_hair = to_surface.inverted()
+        to_hair_rotation = to_hair.to_3x3()
+        thickness = max(0.01, float(flatten))
+        cap_offset = max(0.0, float(cap_offset))
+        hug = max(0.0, float(hug))
+
+        with HairCardService._evaluated_surface(surface_obj, depsgraph) as mesh:
+            allowed = HairCardService._body_face_indices(surface_obj, mesh)
+            polygons = [tuple(polygon.vertices) for polygon in mesh.polygons
+                        if allowed is None or polygon.index in allowed]
+            tree = BVHTree.FromPolygons([vertex.co for vertex in mesh.vertices], polygons, all_triangles=False, epsilon=0.0)
+
+            down = Vector((0.0, 0.0, -1.0))
+            for clump in clumps:
+                curve, _minor, root_radius, _normal = clump
+                original = [to_surface @ Vector(tuple(point)) for point in curve]
+                location, root_normal, _face, _distance = tree.find_nearest(original[0])
+                if location is None:
+                    continue
+                laid = [location + root_normal * cap_offset]
+                for index in range(1, len(original)):
+                    segment = original[index] - original[index - 1]
+                    floor = cap_offset + root_radius * ring_radius[index] * thickness
+                    parameter = float(target[index])
+                    weight = 0.0
+                    if hug > 0.0 and parameter < hug:
+                        x = parameter / hug
+                        weight = 1.0 - x * x * (3.0 - 2.0 * x)
+                    if weight > 0.0:
+                        # Turn the segment into the scalp's tangent plane (same length); one standing straight out
+                        # falls the way gravity takes it along the scalp
+                        _location, normal, _face, _distance = tree.find_nearest(laid[-1])
+                        along = segment - normal * segment.dot(normal)
+                        if along.length < 0.2 * segment.length:
+                            along = along + (down - normal * down.dot(normal)) * segment.length
+                        if along.length > 1e-12:
+                            segment = segment.lerp(along.normalized() * segment.length, weight)
+                    position = laid[-1] + segment
+                    location, normal, _face, _distance = tree.find_nearest(position)
+                    if location is not None:
+                        height = (position - location).dot(normal)
+                        wanted = max(height + (floor - height) * weight, floor)
+                        position = position + normal * (wanted - height)
+                    laid.append(position)
+                clump[0] = np.array([tuple(to_hair @ point) for point in laid])
+                clump[3] = np.array((to_hair_rotation @ root_normal).normalized())
+
+            if cap_offset <= 0.0:
+                return None
+            cap_faces = HairCardService._fur_bearing_faces_in(mesh, surface_obj, hair_obj, 1, depsgraph)
+            if not cap_faces:
+                return None
+            return HairCardService._cut_hair_cap(mesh, cap_faces, tree, roots, to_surface, cap_offset)
+
+    @staticmethod
+    def _cut_hair_cap(mesh: bpy.types.Mesh, cap_faces: set[int], tree: Any, roots: "np.ndarray", to_surface: Any,
+                      cap_offset: float) -> "tuple[np.ndarray, list[tuple[int, ...]]] | None":
+        """The hair cap: ``cap_faces`` of the body ``mesh`` cut ``_CLUMP_CAP_CUTS`` times, every face further than
+        ``_CLUMP_CAP_REACH`` from the nearest strand root dropped, the border smoothed so the hairline is not a staircase
+        of body faces, and every vertex put ``cap_offset`` above the body along its normal (``tree``: BVH of the body).
+
+        Returns (vertices in hair local space, faces) or None if nothing is left.
+        """
+        import bmesh
+        import numpy as np
+        from mathutils.kdtree import KDTree
+
+        root_tree = KDTree(len(roots))
+        for index, root in enumerate(roots):
+            root_tree.insert(to_surface @ Vector(tuple(root)), index)
+        root_tree.balance()
+
+        bm = bmesh.new()
+        try:
+            new_verts = {}
+            for face in sorted(cap_faces):
+                corners = []
+                for index in mesh.polygons[face].vertices:
+                    if index not in new_verts:
+                        new_verts[index] = bm.verts.new(mesh.vertices[index].co)
+                    corners.append(new_verts[index])
+                bm.faces.new(corners)
+            bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=_CLUMP_CAP_CUTS, use_grid_fill=True)
+            for vert in bm.verts:
+                location, _normal, _face, _distance = tree.find_nearest(vert.co)
+                if location is not None:
+                    vert.co = location
+            far = [face for face in bm.faces if root_tree.find(face.calc_center_median())[2] > _CLUMP_CAP_REACH]
+            bmesh.ops.delete(bm, geom=far, context='FACES')
+            loose = [vert for vert in bm.verts if not vert.link_faces]
+            bmesh.ops.delete(bm, geom=loose, context='VERTS')
+            if not bm.faces:
+                return None
+
+            # Round off the staircase: each border vertex moves to the mean of its border neighbours, back on the body
+            for _step in range(_CLUMP_CAP_BORDER_SMOOTHING):
+                moved = {}
+                for vert in bm.verts:
+                    if not vert.is_boundary:
+                        continue
+                    neighbours = [edge.other_vert(vert).co for edge in vert.link_edges if edge.is_boundary]
+                    if len(neighbours) == 2:
+                        moved[vert] = (vert.co + neighbours[0] + neighbours[1]) / 3.0
+                for vert, co in moved.items():
+                    location, _normal, _face, _distance = tree.find_nearest(co)
+                    vert.co = location if location is not None else co
+
+            to_hair = to_surface.inverted()
+            bm.verts.index_update()
+            cap_verts = []
+            for vert in bm.verts:
+                location, normal, _face, _distance = tree.find_nearest(vert.co)
+                lifted = vert.co + normal * cap_offset if location is not None else vert.co
+                cap_verts.append(tuple(to_hair @ lifted))
+            faces = [tuple(vert.index for vert in face.verts) for face in bm.faces]
+        finally:
+            bm.free()
+        return np.array(cap_verts), faces
+
+    @staticmethod
     def build_clump_mesh(hair_obj: bpy.types.Object, cluster_count: int, min_strands: int, seed: int, samples: int, max_tris: int,
                          depsgraph: bpy.types.Depsgraph | None = None, width: float = 1.0,
-                         tip_radius: float = _CLUMP_TIP_RADIUS) -> bpy.types.Mesh | None:
+                         tip_radius: float = _CLUMP_TIP_RADIUS, flatten: float = CLUMP_FLATTEN,
+                         flow_passes: int = 0, surface_obj: bpy.types.Object | None = None, cap_offset: float = 0.0,
+                         hug: float = 0.0) -> bpy.types.Mesh | None:
         """Build one closed, tapered tube per clump of nearby strands.
 
         Strands are grouped like the other cluster modes. Each clump follows its members' averaged curve
@@ -1564,6 +1742,17 @@ class HairCardService():
         Clumps with the nearest roots are merged until the whole style is at most ``max_tris`` triangles.
         A clump's root radius is the spread of its members' roots times ``width``; it narrows linearly to
         ``tip_radius`` times that at the last ring.
+
+        ``flatten`` is the cross-section's flat half-axis as a fraction of its wide one: 0.5 is the 2:1 tube, lower
+        values give flat lens-section ribbons that tile where they overlap.
+        ``flow_passes`` times, each clump's curve direction is averaged with its nearest neighbours' (by root), so
+        short styles sweep one way instead of pointing every way.
+        With a ``surface_obj`` (the body), the flat axis starts along the scalp normal, so a ribbon lies broad face down,
+        and every curve point is kept outside the scalp. ``hug`` (a fraction of the curve length) pulls the first stretch
+        of each clump down onto the scalp, its root half sunk into the cap. A ``cap_offset`` above 0 adds a hair cap:
+        the body faces the hair grows from (``_fur_bearing_faces_in``, one ring dilated), lifted that far off the skin, in
+        the same mesh and material (V 0, the root colour), so no bare scalp shows between clumps. The cap is not counted
+        against ``max_tris``.
 
         Returns bpy.types.Mesh, or None if no clump qualified or one clump alone does not fit in ``max_tris``.
         """
@@ -1610,6 +1799,8 @@ class HairCardService():
             faces.append(tuple(corner[0] for corner in corners))
             loop_uvs.extend((corner[1], corner[2]) for corner in corners)
 
+        # Every clump's averaged curve, root thickness and PCA minor axis first: the flow pass needs all curves at once
+        clumps = []
         for cluster_index in range(clustered["cluster_count"]):
             members = HairCardService._bundle_members(clustered, cluster_index, min_strands)
             if members is None:
@@ -1617,23 +1808,39 @@ class HairCardService():
             curve = HairCardService._bundle_mean_curve(clustered, members, target)
             if curve is None:
                 continue
-
             member_points = np.concatenate([positions[first_index[i]:first_index[i] + point_count[i]] for i in members], axis=0)
             centered = member_points - member_points.mean(axis=0)
             _eigvals, eigvecs = np.linalg.eigh(centered.T @ centered)
-            minor_axis = eigvecs[:, 0]
-
             member_roots = roots[members]
             spread = member_roots - member_roots.mean(axis=0)
             root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())) * width, _CLUMP_MIN_RADIUS)
+            clumps.append([curve, eigvecs[:, 0], root_radius, None])
 
+        if clumps and flow_passes > 0:
+            HairCardService._smooth_clump_flow(clumps, int(flow_passes))
+
+        ring_radius = [1.0 - (1.0 - tip_radius) * ring / (ring_count - 1) for ring in range(ring_count)] + [tip_radius]
+        flat_scale = max(0.01, float(flatten)) / CLUMP_FLATTEN
+        if surface_obj is not None and clumps:
+            cap = HairCardService._lay_clumps_on_scalp(clumps, surface_obj, hair_obj, roots, target, ring_radius,
+                                                       flatten, cap_offset, hug, depsgraph)
+            if cap is not None:
+                cap_verts, cap_faces = cap
+                base = len(verts)
+                verts.extend(tuple(co) for co in cap_verts)
+                for polygon in cap_faces:
+                    add_face(tuple((base + index, 0.5, 0.0) for index in polygon))
+
+        for curve, minor_axis, root_radius, scalp_normal in clumps:
             tangents = np.gradient(curve, axis=0)
             lengths = np.linalg.norm(tangents, axis=1)
             if lengths.min() <= 1e-9:
                 continue
             tangents = tangents / lengths[:, None]
 
-            flat_axis = minor_axis - np.dot(minor_axis, tangents[0]) * tangents[0]
+            # Broad face down on the scalp when it is known, else across the clump's flattest spread
+            flat_source = scalp_normal if scalp_normal is not None else minor_axis
+            flat_axis = flat_source - np.dot(flat_source, tangents[0]) * tangents[0]
             if np.linalg.norm(flat_axis) < 1e-6:
                 # Minor axis along the strands: any direction across the root tangent will do
                 helper = np.array((1.0, 0.0, 0.0)) if abs(tangents[0][0]) < 0.9 else np.array((0.0, 1.0, 0.0))
@@ -1649,10 +1856,10 @@ class HairCardService():
                     flat_axis /= np.linalg.norm(flat_axis)
                 # n x T, so the angle runs counter-clockwise about the tangent and the faces below point outwards
                 wide_axis = np.cross(flat_axis, tangent)
-                radius = root_radius * (1.0 - (1.0 - tip_radius) * ring / (ring_count - 1))
+                radius = root_radius * ring_radius[ring]
                 ring_starts.append(len(verts))
                 for _fraction, wide, flat in shapes[ring]:
-                    point = curve[ring] + radius * wide * wide_axis + radius * flat * flat_axis
+                    point = curve[ring] + radius * wide * wide_axis + radius * flat * flat_scale * flat_axis
                     verts.append(tuple(point))
             apex = len(verts)
             verts.append(tuple(curve[-1]))

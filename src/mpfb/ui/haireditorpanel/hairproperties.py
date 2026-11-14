@@ -190,6 +190,10 @@ DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS = {
         "cards_clump_max_tris": ("int", (100, 100000), 5000, "Triangle budget for the whole style: nearest clumps are merged until it fits (clump mode only)"),
         "cards_clump_width": ("float", (0.25, 4.0), 1.0, "Clump thickness, as a multiple of the spread of its strands' roots (clump mode only)"),
         "cards_clump_tip": ("float", (0.0, 1.0), 0.25, "Clump thickness at the tip, as a fraction of its thickness at the root (clump mode only)"),
+        "cards_clump_flatten": ("float", (0.05, 0.5), 0.5, "How flat each clump's cross-section is, as its thickness over its width: 0.5 is a round-ish tube, lower is a flat ribbon (clump mode only)"),
+        "cards_clump_flow": ("int", (0, 20), 0, "How many times each clump's direction is averaged with its neighbours', so the locks sweep one way (clump mode only)"),
+        "cards_clump_hug": ("float", (0.0, 1.0), 0.0, "How much of each clump's length is laid along the scalp from its root; above 0 also keeps every clump outside the head (clump mode only)"),
+        "cards_clump_cap": ("float", (0.0, 0.02), 0.0, "Height in metres of a hair cap shell over the scalp the hair grows from, under the clumps; 0 is no cap (clump mode only)"),
         }
 
 def create_cards_config_properties(config_set, basemesh, asset_name):
