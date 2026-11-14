@@ -30,6 +30,16 @@ A character file holds these keys; all but "name" are optional and default to DE
                 settings (DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS keys); cards_mode defaults to CLUMP and is
                 the only mode allowed, since the stylized hair material has no alpha. "color" is the tip
                 colour of the stylized hair material, linear RGB 0 to 1; the root is 15% darker.
+    facial_hair facial hair, each region its own groom (GameDevDocs hair/procedural-grooming, "groom regions
+                separately"):
+                    {"brows": {...}, "moustache": {...}, "beard": {...},
+                     "stubble": {"region": ["wild_beard"], "color": [r, g, b], "strength": 0.85, ...}}
+                brows, moustache and beard are curve hairstyles in the form "hair" takes, each converted to clump
+                cards with the stylized hair material. Set "eyebrows" to null when "brows" replaces them.
+                stubble is a texture layer on the skin (HairOverlayService.apply_stubble), painted where the
+                curve roots of the "region" pack styles grow: those of the regions above are reused, others are
+                applied only to read their roots. Its other keys (STUBBLE_KEYS) tune the layer; "inner" and
+                "outer" are the region's full and zero distances from a root, in metres.
     clothes     a list of clothes asset names
     rig         a built-in rig name, or null for none
     pose        null, a pose name from data/poses/<rig>_fk/, or a path to a pose JSON relative to the
@@ -56,6 +66,7 @@ DEFAULTS = {
     "teeth": "teeth_base",
     "tongue": "tongue01",
     "hair": None,
+    "facial_hair": {},
     "clothes": [],
     "shoes": None,
     "rig": "default",
@@ -68,6 +79,10 @@ BODYPARTS = (("eyebrows", "eyebrows", "Eyebrows"), ("eyelashes", "eyelashes", "E
              ("teeth", "teeth", "Teeth"), ("tongue", "tongue", "Tongue"), ("hair", "hair", "Hair"))
 CURVE_HAIR_KEYS = ("pack", "blend", "cards", "color")
 CURVE_HAIR_MODE = "CLUMP"
+FACIAL_HAIR_REGIONS = ("brows", "moustache", "beard")
+# Stubble keys and their (low, high) bounds; "region" and "color" are checked apart
+STUBBLE_KEYS = {"strength": (0.0, 1.0), "shadow": (0.0, 1.0), "density": (0.0, 1.0),
+                "dots_per_metre": (100.0, 5000.0), "inner": (0.0, 0.05), "outer": (0.001, 0.1)}
 EYES_ASSET = "high-poly"
 # (name, camera yaw in degrees: 0 looks at the face, 90 at the character's left side)
 VIEWS = (("front", 0.0), ("three_quarter", 35.0), ("side", 90.0))
@@ -132,6 +147,7 @@ def load_character(path):
         char["hair"] = _check_curve_hair(path, char["hair"])
     elif char["hair"] is not None and not isinstance(char["hair"], str):
         raise ValueError(f"{path}: hair is an asset name, a curve hairstyle object or null")
+    char["facial_hair"] = _check_facial_hair(path, char["facial_hair"])
     if not isinstance(char["clothes"], list):
         raise ValueError(f"{path}: clothes is a list of asset names")
     if char["pose"] is not None and char["rig"] is None:
@@ -139,8 +155,47 @@ def load_character(path):
     return char
 
 
+def _check_color(path, what, color):
+    if color is not None and (not isinstance(color, list) or len(color) != 3
+                              or not all(isinstance(c, (int, float)) and 0.0 <= c <= 1.0 for c in color)):
+        raise ValueError(f"{path}: {what} color {color!r} is not three numbers from 0 to 1")
+
+
+def _check_facial_hair(path, facial):
+    """Check the facial hair regions and the stubble layer. Raises ValueError."""
+    if not isinstance(facial, dict):
+        raise ValueError(f"{path}: facial_hair is an object of regions")
+    bad = set(facial) - set(FACIAL_HAIR_REGIONS) - {"stubble"}
+    if bad:
+        raise ValueError(f"{path}: unknown facial hair regions {sorted(bad)}")
+    checked = {region: _check_curve_hair(path, facial[region]) for region in FACIAL_HAIR_REGIONS
+               if facial.get(region) is not None}
+    stubble = facial.get("stubble")
+    if stubble is not None:
+        if not isinstance(stubble, dict):
+            raise ValueError(f"{path}: stubble is an object")
+        bad = set(stubble) - set(STUBBLE_KEYS) - {"region", "color"}
+        if bad:
+            raise ValueError(f"{path}: unknown stubble keys {sorted(bad)}")
+        region = stubble.get("region")
+        if not isinstance(region, list) or not region or not all(isinstance(r, str) and r for r in region):
+            raise ValueError(f"{path}: stubble region is a list of pack style names")
+        _check_color(path, "stubble", stubble.get("color"))
+        for name, (low, high) in STUBBLE_KEYS.items():
+            value = stubble.get(name)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                      or not low <= value <= high):
+                raise ValueError(f"{path}: stubble {name} {value!r} is not a number from {low} to {high}")
+        if stubble.get("inner", 0.0) >= stubble.get("outer", 0.014):
+            raise ValueError(f"{path}: stubble inner must be below outer")
+        checked["stubble"] = dict(stubble)
+    return checked
+
+
 def _check_curve_hair(path, hair):
     """Check a curve hairstyle and fill in its defaults. Raises ValueError."""
+    if not isinstance(hair, dict):
+        raise ValueError(f"{path}: a curve hairstyle is an object")
     bad = set(hair) - set(CURVE_HAIR_KEYS)
     if bad:
         raise ValueError(f"{path}: unknown hair keys {sorted(bad)}")
@@ -163,9 +218,7 @@ def _check_curve_hair(path, hair):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not extra[0] <= value <= extra[1]:
                 raise ValueError(f"{path}: hair {name} {value!r} is not a number from {extra[0]} to {extra[1]}")
     color = hair.get("color")
-    if color is not None and (not isinstance(color, list) or len(color) != 3
-                              or not all(isinstance(c, (int, float)) and 0.0 <= c <= 1.0 for c in color)):
-        raise ValueError(f"{path}: hair color {color!r} is not three numbers from 0 to 1")
+    _check_color(path, "hair", color)
     blend = hair.get("blend")
     if blend is not None and (not isinstance(blend, str) or not blend.endswith(".blend")):
         raise ValueError(f"{path}: hair blend {blend!r} is not a path to a .blend file")
@@ -259,6 +312,7 @@ def build_character(char):
 
     if isinstance(char["hair"], dict):
         add_curve_hair(basemesh, char["hair"])
+    add_facial_hair(basemesh, char["facial_hair"])
 
     if rig is not None and char["pose"]:
         bpy.ops.object.select_all(action="DESELECT")
@@ -320,6 +374,49 @@ def add_curve_hair(basemesh, hair):
 
     hair_obj.hide_set(True)
     hair_obj.hide_render = True
+    return cards
+
+
+def add_facial_hair(basemesh, facial):
+    """Groom each facial hair region as its own clump-card hair, then lay the stubble layer on the skin where the
+    stubble's region styles grow. Returns {region: card object}."""
+    cards = {region: add_curve_hair(basemesh, facial[region]) for region in FACIAL_HAIR_REGIONS if region in facial}
+    stubble = facial.get("stubble")
+    if stubble is None:
+        return cards
+    MaterialService, ObjectService = _import("services", "MaterialService", "ObjectService")
+    HairOverlayService = _import("services.hairoverlayservice", "HairOverlayService")
+    PACK_NAME_PROPERTY = _import("ui.haireditorpanel.hairproperties", "PACK_NAME_PROPERTY")
+    import numpy as np
+    roots = []
+    for pack in stubble["region"]:
+        applied = [obj for obj in ObjectService.get_list_of_children(basemesh)
+                   if obj.type == "CURVES" and obj.get(PACK_NAME_PROPERTY) == pack]
+        if applied:
+            roots.append(HairOverlayService.curve_root_positions(applied[0]))
+            continue
+        before = set(ObjectService.get_list_of_children(basemesh))
+        ObjectService.deselect_and_deactivate_all()
+        ObjectService.activate_blender_object(basemesh)
+        if bpy.ops.mpfb.apply_hair_operator(hair_asset=pack, hair_blend="") != {"FINISHED"}:
+            raise RuntimeError(f"applying stubble region {pack!r} did not finish")
+        new = [obj for obj in ObjectService.get_list_of_children(basemesh) if obj not in before]
+        region = [obj for obj in new if obj.type == "CURVES" and obj.get(PACK_NAME_PROPERTY) == pack]
+        if len(region) != 1:
+            raise RuntimeError(f"applying stubble region {pack!r} left {len(region)} hair objects")
+        roots.append(HairOverlayService.curve_root_positions(region[0]))
+        for obj in new:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    painted = HairOverlayService.paint_region_mask(basemesh, np.concatenate(roots),
+                                                   inner=stubble.get("inner", 0.004),
+                                                   outer=stubble.get("outer", 0.014))
+    if painted == 0:
+        raise RuntimeError(f"stubble region {stubble['region']} covers no basemesh vertex")
+    options = {k: stubble[k] for k in ("strength", "shadow", "density", "dots_per_metre") if k in stubble}
+    if stubble.get("color") is not None:
+        options["color"] = tuple(stubble["color"])
+    if HairOverlayService.apply_stubble(basemesh, **options) == 0:
+        raise RuntimeError("the skin material took no stubble layer")
     return cards
 
 

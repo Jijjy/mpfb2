@@ -1,0 +1,103 @@
+{
+    "name": "bearded_stubble",
+    "macros": {
+        "gender": 1.0,
+        "age": 0.6,
+        "muscle": 0.6
+    },
+    "skin_tone": "Default",
+    "eyebrows": null,
+    "hair": {
+        "pack": "short_cap",
+        "cards": {
+            "cards_cluster_count": 90,
+            "cards_cluster_samples": 5,
+            "cards_clump_max_tris": 12000,
+            "cards_clump_width": 2.0,
+            "cards_clump_tip": 0.4,
+            "cards_clump_flatten": 0.15,
+            "cards_clump_flow": 15,
+            "cards_clump_hug": 1.0,
+            "cards_clump_cap": 0.003,
+            "cards_clump_strays": 4
+        },
+        "color": [
+            0.03,
+            0.018,
+            0.01
+        ]
+    },
+    "facial_hair": {
+        "brows": {
+            "pack": "wild_eyebrow",
+            "cards": {
+                "cards_cluster_count": 16,
+                "cards_cluster_samples": 5,
+                "cards_clump_max_tris": 2000,
+                "cards_clump_width": 2.0,
+                "cards_clump_tip": 0.3,
+                "cards_clump_flatten": 0.12,
+                "cards_clump_flow": 6,
+                "cards_clump_hug": 1.0,
+                "cards_clump_cap": 0.001
+            },
+            "color": [
+                0.03,
+                0.018,
+                0.01
+            ]
+        },
+        "moustache": {
+            "pack": "wild_moustache",
+            "cards": {
+                "cards_cluster_count": 20,
+                "cards_cluster_samples": 6,
+                "cards_clump_max_tris": 3000,
+                "cards_clump_width": 2.5,
+                "cards_clump_tip": 0.3,
+                "cards_clump_flatten": 0.2,
+                "cards_clump_flow": 8,
+                "cards_clump_hug": 0.5,
+                "cards_clump_cap": 0.0015
+            },
+            "color": [
+                0.03,
+                0.018,
+                0.01
+            ]
+        },
+        "beard": {
+            "pack": "wild_beard",
+            "cards": {
+                "cards_cluster_count": 45,
+                "cards_cluster_samples": 6,
+                "cards_clump_max_tris": 9000,
+                "cards_clump_width": 2.5,
+                "cards_clump_tip": 0.35,
+                "cards_clump_flatten": 0.2,
+                "cards_clump_flow": 10,
+                "cards_clump_hug": 0.5,
+                "cards_clump_cap": 0.002,
+                "cards_clump_strays": 6
+            },
+            "color": [
+                0.03,
+                0.018,
+                0.01
+            ]
+        },
+        "stubble": {
+            "region": [
+                "wild_thick_beard",
+                "wild_moustache"
+            ],
+            "color": [
+                0.03,
+                0.018,
+                0.01
+            ]
+        }
+    },
+    "rig": "default",
+    "pose": "../poses/relaxed.json"
+}

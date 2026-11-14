@@ -32,6 +32,13 @@ ROLE_SIDE_ON_CUTOFF = "side_on_cutoff"
 
 ROLE_SIDE_ON_TIPS = "side_on_tips"
 
+# The stubble texture layer: its overlay tag value, the basemesh attribute holding its region, its default colour
+STUBBLE_OVERLAY = "stubble"
+
+STUBBLE_ATTRIBUTE = "mpfb_stubble_region"
+
+STUBBLE_COLOR = (0.02, 0.016, 0.013)
+
 
 class HairOverlayService():
     """Shaders made of the baked hair maps, for the baked materials and for the body texture overlay. All methods are static methods."""
@@ -458,3 +465,164 @@ class HairOverlayService():
             if any(n.get(OVERLAY_TAG) == asset_name for n in material.node_tree.nodes):
                 return True
         return False
+
+    @staticmethod
+    def rest_vertex_positions(basemesh: bpy.types.Object) -> "np.ndarray":
+        """World positions of the basemesh vertices in rest shape: with its shape keys mixed in, without modifiers
+        (an armature in pose would move them, a subdivision would change the vertex count). Returns (n, 3)."""
+        import numpy as np
+        mesh = basemesh.data
+        coords = np.empty(len(mesh.vertices) * 3, dtype=np.float64)
+        if mesh.shape_keys is None:
+            mesh.vertices.foreach_get("co", coords)
+        else:
+            mix = basemesh.shape_key_add(name="mpfb_rest_mix", from_mix=True)
+            try:
+                mix.data.foreach_get("co", coords)
+            finally:
+                basemesh.shape_key_remove(mix)
+        coords = coords.reshape(-1, 3)
+        matrix = np.array(basemesh.matrix_world)
+        return coords @ matrix[:3, :3].T + matrix[:3, 3]
+
+    @staticmethod
+    def curve_root_positions(hair_obj: bpy.types.Object) -> "np.ndarray":
+        """World positions of the first point of every evaluated curve of a hair curves object: the guides plus the
+        children its modifier stack grows, where it grows them on its surface. Returns (n, 3)."""
+        import numpy as np
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated = hair_obj.evaluated_get(depsgraph)
+        curves = evaluated.data
+        if len(curves.points) == 0:
+            return np.zeros((0, 3))
+        positions = np.empty(len(curves.points) * 3, dtype=np.float64)
+        curves.points.foreach_get("position", positions)
+        offsets = np.empty(len(curves.curves), dtype=np.int64)
+        curves.curves.foreach_get("first_point_index", offsets)
+        roots = positions.reshape(-1, 3)[offsets]
+        matrix = np.array(evaluated.matrix_world)
+        return roots @ matrix[:3, :3].T + matrix[:3, 3]
+
+    @staticmethod
+    def paint_region_mask(basemesh: bpy.types.Object, roots: "np.ndarray", attribute: str = STUBBLE_ATTRIBUTE, inner: float = 0.004, outer: float = 0.014, exclude_groups: tuple[str, ...] = ("lips",)) -> int:
+        """Store, per basemesh vertex, how much it lies in the region the given hair roots grow from: 1 within
+        ``inner`` metres of a root, fading smoothly to 0 at ``outer``, times one minus the vertex's weight in each
+        of ``exclude_groups`` (no hair grows on the lips). A float point attribute named ``attribute``, replaced
+        when present. Returns how many vertices got a non-zero value."""
+        import numpy as np
+        from mathutils.kdtree import KDTree
+        if not 0.0 <= inner < outer:
+            raise ValueError(f"region mask needs 0 <= inner < outer, got {inner}, {outer}")
+        vertices = HairOverlayService.rest_vertex_positions(basemesh)
+        values = np.zeros(len(vertices), dtype=np.float32)
+        if len(roots):
+            tree = KDTree(len(roots))
+            for index, root in enumerate(roots):
+                tree.insert(root, index)
+            tree.balance()
+            for index, vertex in enumerate(vertices):
+                distance = tree.find(vertex)[2]
+                if distance < outer:
+                    t = min(1.0, max(0.0, (outer - distance) / (outer - inner)))
+                    values[index] = t * t * (3.0 - 2.0 * t)
+        excluded = {basemesh.vertex_groups[name].index for name in exclude_groups if name in basemesh.vertex_groups}
+        if excluded:
+            for index in np.nonzero(values)[0]:
+                for group in basemesh.data.vertices[index].groups:
+                    if group.group in excluded:
+                        values[index] *= 1.0 - group.weight
+        mesh = basemesh.data
+        if attribute in mesh.attributes:
+            mesh.attributes.remove(mesh.attributes[attribute])
+        mesh.attributes.new(attribute, "FLOAT", "POINT").data.foreach_set("value", values)
+        mesh.update()
+        return int(np.count_nonzero(values))
+
+    @staticmethod
+    def apply_stubble(surface_obj: bpy.types.Object, color: tuple[float, float, float] = STUBBLE_COLOR, strength: float = 0.9, shadow: float = 0.45, density: float = 0.75, dots_per_metre: float = 400.0, attribute: str = STUBBLE_ATTRIBUTE) -> int:
+        """Lay stubble over the skin as a texture layer: a Mix Shader in front of the material output, mixing in a
+        rough hair-coloured shader where the region mask attribute (paint_region_mask) is painted.
+
+        Inside the region the skin takes a shadow tint (``shadow``) and hair-coloured dots on top. The dots are a
+        Voronoi cell pattern on the mesh's rest coordinates (Generated, scaled back to metres), so they stay put on
+        the skin when the rig moves it; ``dots_per_metre`` sets their spacing, ``density`` the share of cells that
+        hold a hair. ``strength`` scales the whole layer. Under 2 mm stubble reads as a texture (GameDevDocs
+        hair-cards-and-shells, facial hair choices), so there are no shells.
+
+        Returns how many material slots got the layer. remove_overlay(surface_obj, STUBBLE_OVERLAY) takes it out.
+        """
+        HairOverlayService.remove_overlay(surface_obj, STUBBLE_OVERLAY)
+        size = surface_obj.data.texspace_size if surface_obj.type == "MESH" else (1.0, 1.0, 1.0)
+        applied = 0
+        for slot in surface_obj.material_slots:
+            material = slot.material
+            if material is None or not material.node_tree:
+                continue
+            node_tree = material.node_tree
+            output = HairOverlayService._material_output(node_tree)
+            if output is None or not output.inputs['Surface'].links:
+                _LOG.warn("Skin material has no surface shader to put stubble over", material.name)
+                continue
+            nodes, links = node_tree.nodes, node_tree.links
+            x, y = output.location[0], output.location[1] - 400
+            created = []
+
+            def add(idname, offset, label):
+                node = nodes.new(idname)
+                node.location = (x + offset[0], y + offset[1])
+                node.label = "Stubble: " + label
+                created.append(node)
+                return node
+
+            coords = add('ShaderNodeTexCoord', (-1600, 0), "rest coordinates")
+            mapping = add('ShaderNodeMapping', (-1400, 0), "metres to dots")
+            mapping.inputs['Scale'].default_value = [2.0 * s * dots_per_metre for s in size]
+            links.new(coords.outputs['Generated'], mapping.inputs['Vector'])
+            voronoi = add('ShaderNodeTexVoronoi', (-1200, 0), "hair cells")
+            voronoi.voronoi_dimensions = '3D'
+            links.new(mapping.outputs['Vector'], voronoi.inputs['Vector'])
+            dot = add('ShaderNodeMapRange', (-1000, 100), "dot")
+            dot.inputs['From Min'].default_value = 0.22
+            dot.inputs['From Max'].default_value = 0.38
+            dot.inputs['To Min'].default_value = 1.0
+            dot.inputs['To Max'].default_value = 0.0
+            links.new(voronoi.outputs['Distance'], dot.inputs['Value'])
+            keep = add('ShaderNodeMath', (-1000, -100), "density")
+            keep.operation = 'LESS_THAN'
+            keep.inputs[1].default_value = density
+            links.new(voronoi.outputs['Color'], keep.inputs[0])
+            dots = add('ShaderNodeMath', (-800, 0), "dots")
+            dots.operation = 'MULTIPLY'
+            links.new(dot.outputs['Result'], dots.inputs[0])
+            links.new(keep.outputs['Value'], dots.inputs[1])
+            shade = add('ShaderNodeMath', (-600, 0), "shadow and dots")
+            shade.operation = 'MULTIPLY_ADD'
+            shade.inputs[1].default_value = 1.0 - shadow
+            shade.inputs[2].default_value = shadow
+            links.new(dots.outputs['Value'], shade.inputs[0])
+            mask = add('ShaderNodeAttribute', (-800, -250), "region")
+            mask.attribute_type = 'GEOMETRY'
+            mask.attribute_name = attribute
+            region = add('ShaderNodeMath', (-400, -100), "in region")
+            region.operation = 'MULTIPLY'
+            links.new(shade.outputs['Value'], region.inputs[0])
+            links.new(mask.outputs['Fac'], region.inputs[1])
+            fac = add('ShaderNodeMath', (-200, -100), "strength")
+            fac.operation = 'MULTIPLY'
+            fac.use_clamp = True
+            fac.inputs[1].default_value = strength
+            links.new(region.outputs['Value'], fac.inputs[0])
+            hair = add('ShaderNodeBsdfPrincipled', (-400, -350), "hair")
+            hair.inputs['Base Color'].default_value = list(color) + [1.0]
+            # Matte: a glossy layer reads as grey sheen over the skin, not as dark hair
+            hair.inputs['Roughness'].default_value = 0.9
+            hair.inputs['Specular IOR Level'].default_value = 0.1
+            mix = add('ShaderNodeMixShader', (-200, 200), "mix")
+            links.new(output.inputs['Surface'].links[0].from_socket, mix.inputs[1])
+            links.new(fac.outputs['Value'], mix.inputs['Fac'])
+            links.new(hair.outputs['BSDF'], mix.inputs[2])
+            links.new(mix.outputs['Shader'], output.inputs['Surface'])
+            for node in created:
+                node[OVERLAY_TAG] = STUBBLE_OVERLAY
+            applied += 1
+        return applied
