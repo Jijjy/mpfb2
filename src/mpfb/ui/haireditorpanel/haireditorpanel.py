@@ -199,7 +199,8 @@ class MPFB_PT_Hair_Editor_Panel(Abstract_Panel):
                 self._draw_cards_props(basemesh, box, asset_name, properties, ["cards_cluster_samples"])
             elif mode == cg.CARDS_MODE_CLUMP:
                 self._draw_cards_props(basemesh, box, asset_name, properties,
-                                        ["cards_cluster_samples", "cards_clump_max_tris"])
+                                        ["cards_cluster_samples", "cards_clump_max_tris", "cards_clump_width",
+                                         "cards_clump_tip"])
             box.label(text="Clustering happens on Regenerate", icon='FILE_REFRESH')
 
         self._card_count_estimate(basemesh, box, asset_name, properties, mode)

@@ -25,7 +25,9 @@ A character file holds these keys; all but "name" are optional and default to DE
     hair        also takes a curve hairstyle from the hair-editor asset pack, converted to clump cards:
                     {"pack": "short_hedgehog", "cards": {"cards_mode": "CLUMP", "cards_cluster_count": 30, ...},
                      "color": [r, g, b]}
-                "pack" is an object name in the pack's hair.blend. "cards" holds the hair editor's card
+                "pack" is an object name in the pack's hair.blend, or in "blend" when that is given: a user blend,
+                relative to <out>. "hair/demo_hair.blend" holds the styles tools/demo/groom_hair.py derives from the
+                pack (demo_bob, demo_curls) and is groomed when missing. "cards" holds the hair editor's card
                 settings (DYNAMIC_CARDS_CONFIG_PROPS_DEFINITIONS keys); cards_mode defaults to CLUMP and is
                 the only mode allowed, since the stylized hair material has no alpha. "color" is the tip
                 colour of the stylized hair material, linear RGB 0 to 1; the root is 15% darker.
@@ -66,7 +68,7 @@ RACE_KEYS = ("african", "asian", "caucasian")
 # (key, asset library subdirectory, object type for add_mhclo_asset)
 BODYPARTS = (("eyebrows", "eyebrows", "Eyebrows"), ("eyelashes", "eyelashes", "Eyelashes"),
              ("teeth", "teeth", "Teeth"), ("tongue", "tongue", "Tongue"), ("hair", "hair", "Hair"))
-CURVE_HAIR_KEYS = ("pack", "cards", "color")
+CURVE_HAIR_KEYS = ("pack", "blend", "cards", "color")
 CURVE_HAIR_MODE = "CLUMP"
 EYES_ASSET = "high-poly"
 # (name, camera yaw in degrees: 0 looks at the face, 90 at the character's left side)
@@ -161,11 +163,17 @@ def _check_curve_hair(path, hair):
         if proptype == "int":
             if isinstance(value, bool) or not isinstance(value, int) or not extra[0] <= value <= extra[1]:
                 raise ValueError(f"{path}: hair {name} {value!r} is not an integer from {extra[0]} to {extra[1]}")
+        elif proptype == "float":
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not extra[0] <= value <= extra[1]:
+                raise ValueError(f"{path}: hair {name} {value!r} is not a number from {extra[0]} to {extra[1]}")
     color = hair.get("color")
     if color is not None and (not isinstance(color, list) or len(color) != 3
                               or not all(isinstance(c, (int, float)) and 0.0 <= c <= 1.0 for c in color)):
         raise ValueError(f"{path}: hair color {color!r} is not three numbers from 0 to 1")
-    return {"pack": hair["pack"], "cards": cards, "color": color}
+    blend = hair.get("blend")
+    if blend is not None and (not isinstance(blend, str) or not blend.endswith(".blend")):
+        raise ValueError(f"{path}: hair blend {blend!r} is not a path to a .blend file")
+    return {"pack": hair["pack"], "blend": blend, "cards": cards, "color": color}
 
 
 def list_characters(names=None, directory=CHARACTERS_DIR):
@@ -281,6 +289,13 @@ def add_curve_hair(basemesh, hair):
         "entities.nodemodel.v2.materials.nodewrapperstylizedhair", "NodeWrapperStylizedHair", "ROOT_DARKENING")
     if HairEditorService.get_hair_blend_path() is None:
         raise IOError("no hair-editor asset pack installed in the MPFB user data dir")
+    blend = ""
+    if hair.get("blend"):
+        blend = os.path.join(out_dir(), hair["blend"])
+        if not os.path.isfile(blend):
+            if os.path.normpath(blend) != os.path.normpath(_groom().out_path()):
+                raise IOError(f"no hair blend {blend}")
+            _groom().groom(blend)
 
     def run(operator, **kwargs):
         ObjectService.deselect_and_deactivate_all()
@@ -289,7 +304,7 @@ def add_curve_hair(basemesh, hair):
             raise RuntimeError(f"{operator.idname()}({kwargs}) did not finish")
 
     before = set(ObjectService.get_list_of_children(basemesh))
-    run(bpy.ops.mpfb.apply_hair_operator, hair_asset=hair["pack"])
+    run(bpy.ops.mpfb.apply_hair_operator, hair_asset=hair["pack"], hair_blend=blend)
     applied = [obj for obj in ObjectService.get_list_of_children(basemesh)
                if obj not in before and obj.get(PACK_NAME_PROPERTY) == hair["pack"] and obj.type == "CURVES"]
     if len(applied) != 1:
@@ -314,6 +329,14 @@ def add_curve_hair(basemesh, hair):
     hair_obj.hide_set(True)
     hair_obj.hide_render = True
     return cards
+
+
+def _groom():
+    """tools/demo/groom_hair.py, imported."""
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import groom_hair
+    return groom_hair
 
 
 def save_blend(char, directory):

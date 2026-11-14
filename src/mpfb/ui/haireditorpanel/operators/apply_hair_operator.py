@@ -33,6 +33,9 @@ class MPFB_OT_ApplyHair_Operator(MpfbOperator):
     bl_options = {'REGISTER', 'UNDO'}
 
     hair_asset: bpy.props.StringProperty()
+    hair_blend: bpy.props.StringProperty(
+        description="Blend file to load the hair object from; empty for the installed hair-editor pack",
+        subtype="FILE_PATH")
 
     def get_logger(self):
         return _LOG
@@ -57,7 +60,7 @@ class MPFB_OT_ApplyHair_Operator(MpfbOperator):
         ObjectService.activate_blender_object(basemesh)
 
         # Load hair asset
-        blend_path = HairEditorService.get_hair_blend_path()
+        blend_path = self.hair_blend or HairEditorService.get_hair_blend_path()
         object_name = self.hair_asset
         brace_name = f"{object_name}_brace"
 

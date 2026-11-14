@@ -75,13 +75,15 @@ def test_builds_and_saves_one_character(out_dir):
 
 
 def test_curve_hair_form(out_dir):
-    """The {"pack", "cards", "color"} hair form: checked by the loader, converted to clump cards with the stylized
-    hair material, the curves hidden. The build needs the hair-editor asset pack."""
+    """The {"pack", "blend", "cards", "color"} hair form: checked by the loader, converted to clump cards with the
+    stylized hair material, the curves hidden. The build needs the hair-editor asset pack, from which it grooms the
+    demo styles into a user blend and takes the bob from there."""
     char = make_demo.load_character(_write(out_dir, "curly", {"hair": {"pack": "short_hedgehog"}}))
-    assert char["hair"] == {"pack": "short_hedgehog", "cards": {"cards_mode": "CLUMP"}, "color": None}
+    assert char["hair"] == {"pack": "short_hedgehog", "blend": None, "cards": {"cards_mode": "CLUMP"}, "color": None}
     for bad in ({"pack": "x", "style": 1}, {"cards": {}}, {"pack": "x", "cards": {"cards_mode": "TILES"}},
                 {"pack": "x", "cards": {"cards_wings": 1}}, {"pack": "x", "cards": {"cards_cluster_count": 1}},
-                {"pack": "x", "color": [2, 0, 0]}, 7):
+                {"pack": "x", "color": [2, 0, 0]}, {"pack": "x", "cards": {"cards_clump_width": 9.0}},
+                {"pack": "x", "blend": "hair.txt"}, 7):
         with pytest.raises(ValueError):
             make_demo.load_character(_write(out_dir, "bad", {"hair": bad}))
 
@@ -90,15 +92,18 @@ def test_curve_hair_form(out_dir):
         pytest.skip("the hair-editor asset pack is not installed")
     MaterialService = make_demo._import("services", "MaterialService")
     hp = make_demo._import("ui.haireditorpanel.hairproperties", "HAIR_PROPERTIES")
+    blend = make_demo._groom().groom(os.path.join(out_dir, "demo_hair.blend"))
     char = make_demo.load_character(_write(out_dir, "curly", {
         "rig": None, "pose": None,
-        "hair": {"pack": "short_hedgehog", "cards": {"cards_cluster_count": 12, "cards_clump_max_tris": 3000},
+        "hair": {"pack": "demo_bob", "blend": blend,
+                 "cards": {"cards_cluster_count": 12, "cards_clump_max_tris": 3000, "cards_clump_width": 2.0},
                  "color": [0.5, 0.2, 0.1]}}))
     basemesh = make_demo.build_character(char)
-    hair = [o for o in basemesh.children if o.get("mpfb_pack_asset") == "short_hedgehog" and o.type == "CURVES"]
+    hair = [o for o in basemesh.children if o.get("mpfb_pack_asset") == "demo_bob" and o.type == "CURVES"]
     assert len(hair) == 1 and hair[0].hide_render
     assert hp.get_value(f"{hair[0].name}_cards_mode", entity_reference=basemesh) == "CLUMP"
     assert hp.get_value(f"{hair[0].name}_cards_cluster_count", entity_reference=basemesh) == 12
+    assert hp.get_value(f"{hair[0].name}_cards_clump_width", entity_reference=basemesh) == approx(2.0)
     cards = bpy.data.objects[hair[0].name + "_cards"]
     assert cards.type == "MESH" and not cards.hide_render and len(cards.data.polygons) > 0
     assert len(cards.data.polygons) <= 3000

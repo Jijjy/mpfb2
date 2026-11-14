@@ -1481,7 +1481,8 @@ class HairCardService():
 
     @staticmethod
     def build_clump_mesh(hair_obj: bpy.types.Object, cluster_count: int, min_strands: int, seed: int, samples: int, max_tris: int,
-                         depsgraph: bpy.types.Depsgraph | None = None) -> bpy.types.Mesh | None:
+                         depsgraph: bpy.types.Depsgraph | None = None, width: float = 1.0,
+                         tip_radius: float = _CLUMP_TIP_RADIUS) -> bpy.types.Mesh | None:
         """Build one closed, tapered tube per clump of nearby strands.
 
         Strands are grouped like the other cluster modes. Each clump follows its members' averaged curve
@@ -1489,6 +1490,8 @@ class HairCardService():
         to 3 at the last ring. The cross-section is flattened 2:1 along the clump's PCA minor axis, and the frame is
         carried along the curve by parallel transport, so a curve that winds through space twists the tube with it.
         Clumps with the nearest roots are merged until the whole style is at most ``max_tris`` triangles.
+        A clump's root radius is the spread of its members' roots times ``width``; it narrows linearly to
+        ``tip_radius`` times that at the last ring.
 
         Returns bpy.types.Mesh, or None if no clump qualified or one clump alone does not fit in ``max_tris``.
         """
@@ -1537,7 +1540,7 @@ class HairCardService():
 
             member_roots = roots[members]
             spread = member_roots - member_roots.mean(axis=0)
-            root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())), _CLUMP_MIN_RADIUS)
+            root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())) * width, _CLUMP_MIN_RADIUS)
 
             tangents = np.gradient(curve, axis=0)
             lengths = np.linalg.norm(tangents, axis=1)
@@ -1561,7 +1564,7 @@ class HairCardService():
                     flat_axis /= np.linalg.norm(flat_axis)
                 # n x T, so the angle runs counter-clockwise about the tangent and the faces below point outwards
                 wide_axis = np.cross(flat_axis, tangent)
-                radius = root_radius * (1.0 - (1.0 - _CLUMP_TIP_RADIUS) * ring / (ring_count - 1))
+                radius = root_radius * (1.0 - (1.0 - tip_radius) * ring / (ring_count - 1))
                 ring_starts.append(len(verts))
                 for side in range(sides[ring]):
                     angle = 2.0 * math.pi * side / sides[ring]

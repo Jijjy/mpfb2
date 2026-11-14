@@ -86,7 +86,10 @@ def build_cards_for_asset(context, basemesh, hair_obj, card_name, is_fur, proper
         elif mode == cg.CARDS_MODE_CLUMP:
             max_tris = int(properties.get_value(
                 f"{asset_name}_cards_clump_max_tris", 5000, entity_reference=basemesh))
-            data = HairCardService.build_clump_mesh(hair_obj, *cluster_settings, samples, max_tris, depsgraph=depsgraph)
+            width = float(properties.get_value(f"{asset_name}_cards_clump_width", 1.0, entity_reference=basemesh))
+            tip = float(properties.get_value(f"{asset_name}_cards_clump_tip", 0.25, entity_reference=basemesh))
+            data = HairCardService.build_clump_mesh(hair_obj, *cluster_settings, samples, max_tris, depsgraph=depsgraph,
+                                                    width=width, tip_radius=tip)
         else:
             data = HairCardService.build_cluster_ribbon_mesh(hair_obj, *cluster_settings, samples, depsgraph=depsgraph)
 

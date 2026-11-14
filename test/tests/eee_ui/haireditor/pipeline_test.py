@@ -267,7 +267,7 @@ def test_same_asset_on_two_characters(hair_character):
 def test_unknown_asset_is_refused(character):
     require_pack_asset(HAIR_ASSET)
     objects = len(bpy.data.objects)
-    result, report = run_hardened(ApplyHair, character, hair_asset="no_such_hair")
+    result, report = run_hardened(ApplyHair, character, hair_asset="no_such_hair", hair_blend="")
     assert result == {'CANCELLED'}
     report.assert_reported('ERROR', "not found")
     # Only the implicit setup's empty hair object may have been added
