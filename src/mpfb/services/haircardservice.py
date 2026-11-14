@@ -1558,11 +1558,16 @@ class HairCardService():
             # Clumps holding the two sides of a parting pair
             position = {label: index for index, label in enumerate(labels)}
             conflict = np.zeros((len(labels), len(labels)), dtype=bool)
-            for a, b in clustered["guide_partings"]:
-                first = position.get(int(clustered["guide_clumps"][a]))
-                second = position.get(int(clustered["guide_clumps"][b]))
-                if first is not None and second is not None:
-                    conflict[first, second] = conflict[second, first] = True
+            label_position = np.full(int(assignments.max()) + 1, -1, dtype=np.int64)
+            label_position[list(position)] = list(position.values())
+            pairs = np.asarray(clustered["guide_partings"], dtype=np.int64).reshape(-1, 2)
+            guide_clumps = np.asarray(clustered["guide_clumps"], dtype=np.int64)
+            pair_clumps = guide_clumps[pairs]
+            pair_clumps[pair_clumps > len(label_position) - 1] = -1
+            pair_positions = np.where(pair_clumps >= 0, label_position[np.maximum(pair_clumps, 0)], -1)
+            pair_positions = pair_positions[(pair_positions >= 0).all(axis=1)]
+            conflict[pair_positions[:, 0], pair_positions[:, 1]] = True
+            conflict[pair_positions[:, 1], pair_positions[:, 0]] = True
 
         while len(labels) > max_clusters:
             distances = ((centroids[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
@@ -1772,17 +1777,28 @@ class HairCardService():
 
         nearest = neighbours["nearest"]
         lie = neighbours["lie"]
-        partings = HairCardService.guide_parting_pairs(neighbours)
+        # Each group root -> the roots of the groups it holds a parting pair with, kept current on every union
+        conflicts: dict[int, set[int]] = {}
+        for a, b in HairCardService.guide_parting_pairs(neighbours):
+            if a != b:
+                conflicts.setdefault(a, set()).add(b)
+                conflicts.setdefault(b, set()).add(a)
         joined = neighbours["same_flow"] & (labels[nearest] == labels[:, None])
         guide_index, column = np.nonzero(joined)
         alike = (lie[guide_index] * lie[nearest[guide_index, column]]).sum(axis=1)
         for order in np.argsort(-alike, kind="stable"):
             first, second = find(guide_index[order]), find(nearest[guide_index[order], column[order]])
-            if first == second:
+            if first == second or second in conflicts.get(first, ()):
                 continue
-            if any({find(a), find(b)} == {first, second} for a, b in partings):
-                continue
-            parent[max(first, second)] = min(first, second)
+            keep, gone = min(first, second), max(first, second)
+            parent[gone] = keep
+            moved = conflicts.pop(gone, None)
+            if moved:
+                for other in moved:
+                    other_set = conflicts[other]
+                    other_set.discard(gone)
+                    other_set.add(keep)
+                conflicts.setdefault(keep, set()).update(moved)
         components = np.array([find(index) for index in range(len(guides))])
         return np.unique(components, return_inverse=True)[1].astype(np.int64)
 
