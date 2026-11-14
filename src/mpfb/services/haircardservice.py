@@ -1444,6 +1444,76 @@ class HairCardService():
         return [int(math.floor(CLUMP_ROOT_SIDES - span * ring / (ring_count - 1) + 0.5)) for ring in range(ring_count)]
 
     @staticmethod
+    def clump_ring_fractions(side_count: int) -> list[float]:
+        """Where the vertices of a clump ring sit, as fractions of a full turn from the wide axis.
+
+        Every ring has a vertex at both ends of its wide axis (0 and 0.5), whatever its side count, so the face-on width
+        of the tube does not jump where the side count drops. The other vertices are spread evenly over the two halves,
+        the odd one going to the first half.
+        """
+        side_count = max(3, int(side_count))
+        extra = side_count - 2
+        first_half = (extra + 1) // 2
+        second_half = extra - first_half
+        fractions = [0.0]
+        fractions.extend(0.5 * (k + 1) / (first_half + 1) for k in range(first_half))
+        fractions.append(0.5)
+        fractions.extend(0.5 + 0.5 * (k + 1) / (second_half + 1) for k in range(second_half))
+        return fractions
+
+    @staticmethod
+    def clump_ring_shape(side_count: int, next_count: int, morph: float) -> list[tuple[float, float, float]]:
+        """The vertices of one clump ring as (turn fraction, wide, flat), on a unit 2:1 ellipse (wide 1, flat 0.5).
+
+        At ``morph`` 0 the ring is the ``side_count`` polygon of ``clump_ring_fractions`` on the ellipse. As ``morph``
+        goes to 1 it turns into the ``next_count`` polygon: the vertices that stay slide along the ellipse to that
+        polygon's corners and the ones that go move onto its edges. A run of rings with one side count is morphed
+        towards the next count over its length, so the tube's outline does not jump where the side count drops.
+        """
+        source = HairCardService.clump_ring_fractions(side_count)
+        if next_count >= side_count or morph <= 0.0:
+            return [(f, math.cos(2.0 * math.pi * f), 0.5 * math.sin(2.0 * math.pi * f)) for f in source]
+        target = HairCardService.clump_ring_fractions(next_count) + [1.0]
+        morph = min(1.0, morph)
+
+        def on_ellipse(f):
+            return math.cos(2.0 * math.pi * f), 0.5 * math.sin(2.0 * math.pi * f)
+
+        # Both layouts have corners at 0 and 0.5; match the inner corners of each half, then spread the rest
+        # evenly along the target edge between the matched corners on either side
+        def halves(fractions):
+            first = [i for i, f in enumerate(fractions) if 0.0 < f < 0.5]
+            second = [i for i, f in enumerate(fractions) if 0.5 < f < 1.0]
+            return first, second
+
+        source_halves = halves(source)
+        target_halves = halves(target[:-1])
+        anchors = {0: 0, source.index(0.5): target.index(0.5), len(source): len(target) - 1}
+        for source_inner, target_inner in zip(source_halves, target_halves):
+            p, q = len(source_inner), len(target_inner)
+            for j in range(q):
+                anchors[source_inner[int(math.floor((j + 1) * (p + 1) / (q + 1) + 0.5)) - 1]] = target_inner[j]
+        corners = sorted(anchors)
+
+        ring = []
+        for k, f in enumerate(source):
+            if k in anchors:
+                fraction = f + (target[anchors[k]] - f) * morph
+                ring.append((fraction, *on_ellipse(fraction)))
+                continue
+            below = max(c for c in corners if c < k)
+            above = min(c for c in corners if c > k)
+            weight = (k - below) / (above - below)
+            low, high = target[anchors[below]], target[anchors[above]]
+            end_fraction = low + (high - low) * weight
+            (lx, ly), (hx, hy) = on_ellipse(low), on_ellipse(high)
+            end_x, end_y = lx + (hx - lx) * weight, ly + (hy - ly) * weight
+            fraction = f + (end_fraction - f) * morph
+            x, y = on_ellipse(fraction)
+            ring.append((fraction, x + (end_x - x) * morph, y + (end_y - y) * morph))
+        return ring
+
+    @staticmethod
     def clump_triangle_count(ring_count: int) -> int:
         """Triangles in one clump tube: the root cap fan, the strips between rings and the tip fan to the apex."""
         sides = HairCardService.clump_ring_sides(ring_count)
@@ -1487,7 +1557,9 @@ class HairCardService():
 
         Strands are grouped like the other cluster modes. Each clump follows its members' averaged curve
         (``samples`` points: one ring per point, the last point is the closed tip). Rings go from 6 sides at the root
-        to 3 at the last ring. The cross-section is flattened 2:1 along the clump's PCA minor axis, and the frame is
+        to 3 at the last ring. Every ring has a vertex at both ends of its wide axis, and each run of rings morphs into the
+        next side count over its length (``clump_ring_shape``), so the outline does not notch where the count drops.
+        The cross-section is flattened 2:1 along the clump's PCA minor axis, and the frame is
         carried along the curve by parallel transport, so a curve that winds through space twists the tube with it.
         Clumps with the nearest roots are merged until the whole style is at most ``max_tris`` triangles.
         A clump's root radius is the spread of its members' roots times ``width``; it narrows linearly to
@@ -1514,6 +1586,19 @@ class HairCardService():
         point_count = clustered["point_count"]
         roots = clustered["roots"]
         sides = HairCardService.clump_ring_sides(ring_count)
+        # Each run of rings with one side count morphs towards the next count, reaching it at the run's last ring
+        shapes = []
+        for ring, count in enumerate(sides):
+            run_start = ring
+            while run_start > 0 and sides[run_start - 1] == count:
+                run_start -= 1
+            run_end = ring
+            while run_end + 1 < ring_count and sides[run_end + 1] == count:
+                run_end += 1
+            next_count = sides[run_end + 1] if run_end + 1 < ring_count else count
+            shapes.append(HairCardService.clump_ring_shape(count, next_count, (ring - run_start + 1) / (run_end - run_start + 1)))
+        # Turn fractions per ring, with the seam (1.0) appended so side == sides[ring] is vertex 0 again
+        fractions = [[vertex[0] for vertex in shape] + [1.0] for shape in shapes]
         target = np.linspace(0.0, 1.0, ring_count + 1)
 
         verts = []
@@ -1566,16 +1651,15 @@ class HairCardService():
                 wide_axis = np.cross(flat_axis, tangent)
                 radius = root_radius * (1.0 - (1.0 - tip_radius) * ring / (ring_count - 1))
                 ring_starts.append(len(verts))
-                for side in range(sides[ring]):
-                    angle = 2.0 * math.pi * side / sides[ring]
-                    point = curve[ring] + radius * math.cos(angle) * wide_axis + 0.5 * radius * math.sin(angle) * flat_axis
+                for _fraction, wide, flat in shapes[ring]:
+                    point = curve[ring] + radius * wide * wide_axis + radius * flat * flat_axis
                     verts.append(tuple(point))
             apex = len(verts)
             verts.append(tuple(curve[-1]))
 
             def corner(ring, side):
                 # side == sides[ring] is the seam: vertex 0 again, but with u = 1
-                return (ring_starts[ring] + side % sides[ring], side / sides[ring], target[ring])
+                return (ring_starts[ring] + side % sides[ring], fractions[ring][side], target[ring])
 
             # Root cap, facing back along the strands
             for side in range(1, sides[0] - 1):
@@ -1586,7 +1670,7 @@ class HairCardService():
                 lower_count, upper_count = sides[ring], sides[ring + 1]
                 lower = upper = 0
                 while lower < lower_count or upper < upper_count:
-                    if upper == upper_count or (lower < lower_count and (lower + 1) / lower_count <= (upper + 1) / upper_count):
+                    if upper == upper_count or (lower < lower_count and fractions[ring][lower + 1] <= fractions[ring + 1][upper + 1]):
                         add_face((corner(ring, lower), corner(ring, lower + 1), corner(ring + 1, upper)))
                         lower += 1
                     else:
@@ -1595,7 +1679,8 @@ class HairCardService():
 
             last = ring_count - 1
             for side in range(sides[last]):
-                add_face((corner(last, side), corner(last, side + 1), (apex, (side + 0.5) / sides[last], 1.0)))
+                apex_u = 0.5 * (fractions[last][side] + fractions[last][side + 1])
+                add_face((corner(last, side), corner(last, side + 1), (apex, apex_u, 1.0)))
 
         if not faces:
             return None

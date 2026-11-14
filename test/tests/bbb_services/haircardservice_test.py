@@ -58,3 +58,25 @@ def test_clump_triangle_budget_merges_clumps():
     merged = HairCardService.build_clump_mesh(hair_obj, 36, 1, 0, 10, per_clump * 10)
     assert len(unmerged.polygons) == 36 * per_clump
     assert len(merged.polygons) == 10 * per_clump
+
+
+def test_clump_rings_keep_their_width_when_the_side_count_drops():
+    """Each ring has a vertex at both ends of its wide axis, so the face-on width is the same for every side count."""
+    for count in range(3, 7):
+        fractions = HairCardService.clump_ring_fractions(count)
+        assert len(fractions) == count and fractions == sorted(fractions) and 0.0 in fractions and 0.5 in fractions
+        assert all(0.0 <= f < 1.0 for f in fractions)
+        widths = [math.cos(2.0 * math.pi * f) for f in fractions]
+        assert max(widths) - min(widths) == pytest.approx(2.0)
+
+    # A fully morphed ring has the outline of the next side count, seen from any direction
+    def extent(ring, angle):
+        along = [wide * math.cos(angle) + flat * math.sin(angle) for _f, wide, flat in ring]
+        return max(along) - min(along)
+
+    for count, next_count in ((6, 5), (5, 4), (4, 3), (6, 3)):
+        morphed = HairCardService.clump_ring_shape(count, next_count, 1.0)
+        plain = HairCardService.clump_ring_shape(next_count, next_count, 0.0)
+        assert len(morphed) == count and [v[0] for v in morphed] == sorted(v[0] for v in morphed)
+        for step in range(36):
+            assert extent(morphed, step * math.pi / 36) == pytest.approx(extent(plain, step * math.pi / 36))
