@@ -114,3 +114,31 @@ def test_groom_clumps_keep_a_parting_open_and_flow_keeps_strand_lengths():
 
     assert np.allclose(lengths(plain), lengths(flowed))
     assert not np.allclose(plain["positions"], flowed["positions"])
+
+
+def test_clump_flow_pass_does_not_pull_across_a_parting():
+    """Two near clumps whose lies are only 50 degrees apart still do not average their flow when they hold the two
+    sides of a guide parting pair; without the parting they do. A far clump pointing back is never a flow neighbour."""
+    import numpy as np
+
+    def curve(angle, root):
+        direction = np.array((math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0))
+        return np.array([np.array(root) + 0.01 * step * direction for step in range(5)])
+
+    curves = [curve(0.0, (0.0, 0.0, 0.0)), curve(50.0, (0.01, 0.0, 0.0)), curve(180.0, (1.0, 0.0, 0.0))]
+    clustered = {
+        "assignments": np.array([0, 1, 2]),
+        "strand_guides": np.array([[0, 1, 2], [1, 0, 2], [2, 0, 1]]),
+        "strand_weights": np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        "guide_clumps": np.array([0, 1, 2]),
+        "guide_partings": [(0, 1)],
+    }
+    parted = [[c.copy()] for c in curves]
+    HairCardService._smooth_clump_flow(parted, [0, 1, 2], clustered, 3)
+    for clump, original in zip(parted, curves):
+        assert np.allclose(clump[0], original)
+
+    joined = [[c.copy()] for c in curves]
+    HairCardService._smooth_clump_flow(joined, [0, 1, 2], {**clustered, "guide_partings": []}, 3)
+    assert not np.allclose(joined[0][0], curves[0]) and not np.allclose(joined[1][0], curves[1])
+    assert np.allclose(joined[2][0], curves[2])

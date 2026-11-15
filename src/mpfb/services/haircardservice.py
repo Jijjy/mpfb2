@@ -141,6 +141,8 @@ _GUIDE_NEIGHBOURS = 6
 _GUIDE_SAMPLES = 16
 _GUIDE_MAX_ANGLE = math.radians(60.0)
 _GUIDE_BREAK_DISTANCE = (2.0, 4.0)
+# Nearest clumps whose direction a finished clump's curve is averaged with in each flow pass (same flow, no parting)
+_CLUMP_FLOW_NEIGHBOURS = 4
 # Hair cap: cuts per body edge, how far past the outermost strand root it reaches (metres) and border smoothing steps
 _CLUMP_CAP_CUTS = 2
 _CLUMP_CAP_REACH = 0.008
@@ -2135,7 +2137,9 @@ class HairCardService():
         Strands are grouped by their clump IDs from the groom side (``read_groom_clumps``): guides are clustered and
         split at partings, and each strand follows the guide it weighs most. ``flow_passes`` times, each guide's
         direction is averaged with its same-flow neighbours' before clumping (``smooth_guide_flow``), and the strands
-        follow their guides, so short styles sweep one way instead of pointing every way while partings stay open.
+        follow their guides; then each finished clump's curve gets the same number of passes over its nearest clumps
+        that share its flow and sit on the same side of every parting (``_smooth_clump_flow``), since curl, noise and
+        frizz act after the guides. Short styles sweep one way instead of pointing every way while partings stay open.
         Merging for the budget joins clumps that share a flow first.
         With a ``surface_obj`` (the body), the flat axis starts along the scalp normal, so a ribbon lies broad face down,
         and every curve point is kept outside the scalp. ``hug`` (a fraction of the curve length) pulls the first stretch
@@ -2195,6 +2199,7 @@ class HairCardService():
 
         # Every clump's averaged curve, root thickness and PCA minor axis first: the scalp lay needs all curves at once
         clumps = []
+        clump_labels = []
         for cluster_index in range(clustered["cluster_count"]):
             members = HairCardService._bundle_members(clustered, cluster_index, min_strands)
             if members is None:
@@ -2209,7 +2214,10 @@ class HairCardService():
             spread = member_roots - member_roots.mean(axis=0)
             root_radius = max(float(np.sqrt((spread ** 2).sum(axis=1).mean())) * width, _CLUMP_MIN_RADIUS)
             clumps.append([curve, eigvecs[:, 0], root_radius, None])
+            clump_labels.append(cluster_index)
         unlaid = [clump[0].copy() for clump in clumps]
+        if len(clumps) > 1 and flow_passes > 0:
+            HairCardService._smooth_clump_flow(clumps, clump_labels, clustered, int(flow_passes))
 
         ring_radius = [1.0 - (1.0 - tip_radius) * ring / (ring_count - 1) for ring in range(ring_count)] + [tip_radius]
         flat_scale = max(0.01, float(flatten)) / CLUMP_FLATTEN
@@ -2302,6 +2310,62 @@ class HairCardService():
         mesh.update()
 
         return mesh
+
+    @staticmethod
+    def clump_parting_conflicts(clustered: dict[str, Any], labels: list[int]) -> "np.ndarray":
+        """(C, C) bools: clumps ``labels[i]`` and ``labels[j]`` hold the two sides of a guide parting pair.
+
+        A strand belongs to the side of the guide it weighs most (``read_groom_clumps``). All False without groom-side
+        clumps.
+        """
+        import numpy as np
+
+        conflict = np.zeros((len(labels), len(labels)), dtype=bool)
+        if "strand_guides" not in clustered or not labels:
+            return conflict
+        assignments = clustered["assignments"]
+        dominant = clustered["strand_guides"][np.arange(len(assignments)), np.argmax(clustered["strand_weights"], axis=1)]
+        position = np.full(max(int(assignments.max()), max(labels)) + 1, -1, dtype=np.int64)
+        position[labels] = np.arange(len(labels))
+        strand_clump = position[assignments]
+        guide_count = len(clustered["guide_clumps"])
+        # Each guide's clumps (a guide's strands can end up in more than one after merging)
+        keep = strand_clump >= 0
+        guide_clump = np.zeros((guide_count, len(labels)), dtype=bool)
+        guide_clump[dominant[keep], strand_clump[keep]] = True
+        pairs = np.asarray(clustered["guide_partings"], dtype=np.int64).reshape(-1, 2)
+        for first, second in pairs:
+            sides = np.outer(guide_clump[first], guide_clump[second])
+            conflict |= sides | sides.T
+        np.fill_diagonal(conflict, False)
+        return conflict
+
+    @staticmethod
+    def _smooth_clump_flow(clumps: list, labels: list[int], clustered: dict[str, Any], passes: int) -> None:
+        """Average each clump curve's segment directions with its nearest same-flow neighbours', ``passes`` times.
+
+        The guide flow pass (``smooth_guide_flow``) runs before the node modifiers' curl, noise and frizz, so the finished
+        clumps still scatter; this pass evens them out the way the guide pass does: each of the
+        ``_CLUMP_FLOW_NEIGHBOURS`` nearest clumps by root counts only if its root-to-tip lie is within
+        ``_GUIDE_MAX_ANGLE`` of the clump's and the two do not hold the sides of a parting
+        (``clump_parting_conflicts``), so a parting stays open. Rewrites the curve (index 0) of each entry.
+        """
+        import numpy as np
+
+        curves = np.array([clump[0] for clump in clumps])
+        roots = curves[:, 0]
+        nearest, _distances = HairCardService._nearest(roots, roots, _CLUMP_FLOW_NEIGHBOURS + 1)
+        own = nearest == np.arange(len(roots))[:, None]
+        own[~own.any(axis=1), -1] = True
+        nearest = nearest[~own].reshape(len(roots), -1)
+        lie = curves[:, -1] - curves[:, 0]
+        lie = lie / np.maximum(np.linalg.norm(lie, axis=1), 1e-12)[:, None]
+        same_flow = (lie[:, None, :] * lie[nearest]).sum(axis=2) >= math.cos(_GUIDE_MAX_ANGLE)
+        conflict = HairCardService.clump_parting_conflicts(clustered, labels)
+        same_flow &= ~conflict[np.arange(len(roots))[:, None], nearest]
+        flowed = HairCardService.smooth_guide_flow(curves, {"nearest": nearest, "same_flow": same_flow}, passes)
+        for clump, curve in zip(clumps, flowed):
+            clump[0] = curve
 
     @staticmethod
     def _add_strays(clustered: dict[str, Any], clumps: list, unlaid: list, target: "np.ndarray", count: int, seed: int,
