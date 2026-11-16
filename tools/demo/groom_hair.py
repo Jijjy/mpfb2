@@ -41,9 +41,13 @@ BOB = {
 CURLS = {
     "source": "hair_to_shoulder",
     # Outward push at the tip, from the head centre; the root stays put
-    "volume": 0.06,
+    "volume": 0.02,
+    # The source style stands out 0.13-0.15 m from the head axis at the ears; whatever lies beyond the skull radius is
+    # scaled by this, so the hair sits near the skull at the crown and sides and widens only toward the ends
+    "skull_radius": 0.085,
+    "slim": 0.35,
     # Spiral radius, turns along the strand and the fraction of the strand before the curl starts
-    "curl_radius": 0.022,
+    "curl_radius": 0.012,
     "curl_turns": 2.5,
     "curl_start": 0.2,
     # Wavelength of the scalp field the spiral phase follows; long against a clump's width
@@ -161,6 +165,12 @@ def groom_curls(curves, p):
     for i in range(len(first)):
         strand = _resample(positions[first[i]:first[i] + count[i]], p["points"])
         t = np.linspace(0.0, 1.0, len(strand))
+        side = strand[:, :2] - HEAD_CENTRE[None, :2]
+        dist = np.linalg.norm(side, axis=1)
+        keep = np.where(dist > p["skull_radius"], p["skull_radius"] + (dist - p["skull_radius"]) * p["slim"], dist)
+        slimmed = HEAD_CENTRE[None, :2] + side * (keep / np.maximum(dist, 1e-6))[:, None]
+        slimmed[:, 1] = np.where(side[:, 1] < 0.0, strand[:, 1], slimmed[:, 1])  # leave the front where it is: the face
+        strand[:, :2] = slimmed
         out = strand - HEAD_CENTRE
         out[:, 2] *= 0.3  # mostly sideways, a little up and down
         out[:, 1] = np.maximum(out[:, 1], 0.0)  # never forward, over the face
