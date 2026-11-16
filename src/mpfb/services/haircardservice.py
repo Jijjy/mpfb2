@@ -20,6 +20,7 @@ from typing import Any, TYPE_CHECKING
 import bpy
 from contextlib import contextmanager
 from mathutils import Vector
+from .hairfitservice import HairFitService
 
 if TYPE_CHECKING:
     import numpy as np
@@ -1669,6 +1670,9 @@ class HairCardService():
         hair local space, or None if there is no such modifier (the strands are their own guides) or no guide curves.
         """
         def attaches(modifier):
+            # The guide fit belongs with the attachment: it lays the guides on this body (HairFitService)
+            if HairFitService.is_fit_modifier(modifier):
+                return True
             group = modifier.node_group
             return group is not None and any(node.bl_idname == 'GeometryNodeDeformCurvesOnSurface' for node in group.nodes)
 

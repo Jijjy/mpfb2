@@ -13,6 +13,7 @@ from ....services.logservice import LogService
 from ....services.objectservice import ObjectService
 from .... import ClassManager
 from ....services.haireditorservices import HairEditorService
+from ....services.hairfitservice import HairFitService
 from ....services.modifierservice import ModifierService
 from ...mpfboperator import MpfbOperator
 from ...pollstrategy import pollstrategy, PollStrategy
@@ -120,6 +121,9 @@ class MPFB_OT_ApplyHair_Operator(MpfbOperator):
         # inverse puts it on this character wherever it stands.
         hair_obj.parent = basemesh
         hair_obj.matrix_parent_inverse = Matrix.Identity(4)
+
+        # The groom was made on the default head: fit its guides to this body before the children grow from them
+        HairFitService.fit_to_body(hair_obj, basemesh)
 
         # Define shape properties
         prop_prefix = f"{asset_name}_"
